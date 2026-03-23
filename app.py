@@ -186,6 +186,61 @@ with tab_dash:
 
                 st.markdown("---")
 
+    # --- Top 10 / Bottom 10 ---
+    top_col, bot_col = st.columns(2)
+    with top_col:
+        st.markdown(
+            "<div style='font-size:1em; font-weight:700; color:#10b981; margin-bottom:10px;'>Top 10 Rockets</div>",
+            unsafe_allow_html=True,
+        )
+        for s in all_scored[:10]:
+            score = s["total"]
+            st.markdown(
+                f"""<div style="background:#f0fdf4; padding:8px 12px; border-radius:8px; margin-bottom:4px; display:flex; justify-content:space-between;">
+                    <span style="font-weight:600;">{s['full_name']}</span>
+                    <span style="font-weight:900; color:#10b981;">{int(score)}</span>
+                </div>""",
+                unsafe_allow_html=True,
+            )
+    with bot_col:
+        st.markdown(
+            "<div style='font-size:1em; font-weight:700; color:#ef4444; margin-bottom:10px;'>Bottom 10 Rockets</div>",
+            unsafe_allow_html=True,
+        )
+        for s in all_scored[-10:]:
+            score = s["total"]
+            st.markdown(
+                f"""<div style="background:#fef2f2; padding:8px 12px; border-radius:8px; margin-bottom:4px; display:flex; justify-content:space-between;">
+                    <span style="font-weight:600;">{s['full_name']}</span>
+                    <span style="font-weight:900; color:#ef4444;">{int(score)}</span>
+                </div>""",
+                unsafe_allow_html=True,
+            )
+
+    # --- All Rockets Grid ---
+    st.markdown("<div class='section-title'>All Rockets</div>", unsafe_allow_html=True)
+
+    cols = st.columns(3)
+    for i, rocket in enumerate(all_scored):
+        score = rocket["total"]
+        border = _border_color(score)
+        with cols[i % 3]:
+            st.markdown(
+                f"""<div style="background:#fff; border-radius:12px; padding:18px; margin-bottom:12px;
+                border-left:4px solid {border}; box-shadow:0 2px 8px rgba(0,0,0,0.04);">
+                <div style="font-size:0.95em; font-weight:700; color:#1e293b; margin:2px 0;">
+                {rocket['full_name']}</div>
+                <div style="display:flex; justify-content:space-between; align-items:baseline;">
+                <span style="font-size:1.8em; font-weight:900; color:{border};">{int(score)}</span>
+                <span style="font-size:0.8em; color:#94a3b8;">{rocket['total_launches']} launches</span>
+                </div></div>""",
+                unsafe_allow_html=True,
+            )
+
+# ===================================================================
+# ROCKET DETAIL TAB
+# ===================================================================
+with tab_detail:
     # --- Launch Vehicle Timeline ---
     st.markdown("<div class='section-title'>Launch Vehicle Timeline</div>", unsafe_allow_html=True)
 
@@ -242,63 +297,8 @@ with tab_dash:
             clickmode="none",
             dragmode=False,
         )
-        st.plotly_chart(fig_timeline, use_container_width=True, config={"displayModeBar": False, "staticPlot": True}, key="rocket_timeline")
+        st.plotly_chart(fig_timeline, use_container_width=True, config={"displayModeBar": False, "staticPlot": True}, key="detail_rocket_timeline")
 
-    # --- Top 10 / Bottom 10 ---
-    top_col, bot_col = st.columns(2)
-    with top_col:
-        st.markdown(
-            "<div style='font-size:1em; font-weight:700; color:#10b981; margin-bottom:10px;'>Top 10 Rockets</div>",
-            unsafe_allow_html=True,
-        )
-        for s in all_scored[:10]:
-            score = s["total"]
-            st.markdown(
-                f"""<div style="background:#f0fdf4; padding:8px 12px; border-radius:8px; margin-bottom:4px; display:flex; justify-content:space-between;">
-                    <span style="font-weight:600;">{s['full_name']}</span>
-                    <span style="font-weight:900; color:#10b981;">{int(score)}</span>
-                </div>""",
-                unsafe_allow_html=True,
-            )
-    with bot_col:
-        st.markdown(
-            "<div style='font-size:1em; font-weight:700; color:#ef4444; margin-bottom:10px;'>Bottom 10 Rockets</div>",
-            unsafe_allow_html=True,
-        )
-        for s in all_scored[-10:]:
-            score = s["total"]
-            st.markdown(
-                f"""<div style="background:#fef2f2; padding:8px 12px; border-radius:8px; margin-bottom:4px; display:flex; justify-content:space-between;">
-                    <span style="font-weight:600;">{s['full_name']}</span>
-                    <span style="font-weight:900; color:#ef4444;">{int(score)}</span>
-                </div>""",
-                unsafe_allow_html=True,
-            )
-
-    # --- All Rockets Grid ---
-    st.markdown("<div class='section-title'>All Rockets</div>", unsafe_allow_html=True)
-
-    cols = st.columns(3)
-    for i, rocket in enumerate(all_scored):
-        score = rocket["total"]
-        border = _border_color(score)
-        with cols[i % 3]:
-            st.markdown(
-                f"""<div style="background:#fff; border-radius:12px; padding:18px; margin-bottom:12px;
-                border-left:4px solid {border}; box-shadow:0 2px 8px rgba(0,0,0,0.04);">
-                <div style="font-size:0.95em; font-weight:700; color:#1e293b; margin:2px 0;">
-                {rocket['full_name']}</div>
-                <div style="display:flex; justify-content:space-between; align-items:baseline;">
-                <span style="font-size:1.8em; font-weight:900; color:{border};">{int(score)}</span>
-                <span style="font-size:0.8em; color:#94a3b8;">{rocket['total_launches']} launches</span>
-                </div></div>""",
-                unsafe_allow_html=True,
-            )
-
-# ===================================================================
-# ROCKET DETAIL TAB
-# ===================================================================
-with tab_detail:
     rocket_names = [r["full_name"] for r in all_scored]
     selected_name = st.selectbox("Select a rocket", rocket_names, key="rocket_select")
     selected = next((r for r in all_scored if r["full_name"] == selected_name), None)
