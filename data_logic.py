@@ -67,15 +67,21 @@ def score_launcher(launcher: dict) -> dict:
     short_name = launcher.get("name") or name
     family = launcher.get("family") or ""
 
-    total_launches = launcher.get("total_launch_count") or 0
-    successful = launcher.get("successful_launches") or 0
-    consecutive = launcher.get("consecutive_successful_launches") or 0
-    leo = launcher.get("leo_capacity") or 0
-    gto = launcher.get("gto_capacity") or 0
-    launch_cost = launcher.get("launch_cost") or 0
+    def _to_num(val):
+        try:
+            return float(val) if val else 0
+        except (ValueError, TypeError):
+            return 0
+
+    total_launches = int(_to_num(launcher.get("total_launch_count")))
+    successful = int(_to_num(launcher.get("successful_launches")))
+    consecutive = int(_to_num(launcher.get("consecutive_successful_launches")))
+    leo = _to_num(launcher.get("leo_capacity"))
+    gto = _to_num(launcher.get("gto_capacity"))
+    launch_cost = _to_num(launcher.get("launch_cost"))
     reusable = bool(launcher.get("reusable"))
-    successful_landings = launcher.get("successful_landings") or 0
-    attempted_landings = launcher.get("attempted_landings") or 0
+    successful_landings = int(_to_num(launcher.get("successful_landings")))
+    attempted_landings = int(_to_num(launcher.get("attempted_landings")))
     maiden_flight = launcher.get("maiden_flight") or ""
     description = launcher.get("description") or ""
     length = launcher.get("length")
