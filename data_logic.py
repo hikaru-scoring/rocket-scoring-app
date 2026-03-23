@@ -1,9 +1,12 @@
 # data_logic.py
 """Data fetching and scoring logic for ROCKET-1000."""
+import os
+import json
 import streamlit as st
 import requests
 
 API_BASE = "https://ll.thespacedevs.com/2.2.0/config/launcher/"
+CACHE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "launcher_cache.json")
 
 AXES_LABELS = [
     "Track Record",
@@ -29,7 +32,13 @@ def _clamp(value, lo, hi):
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def fetch_all_launchers() -> list:
-    """Fetch all launcher configurations from Launch Library 2 API."""
+    """Fetch launcher configs, using local cache first then API fallback."""
+    # Try local cache first (always available on deploy)
+    if os.path.exists(CACHE_FILE):
+        with open(CACHE_FILE, "r") as f:
+            return json.load(f)
+
+    # Fallback: try API (may be rate-limited on free tier)
     all_results = []
     offset = 0
     limit = 100
