@@ -90,9 +90,11 @@ def score_launcher(launcher: dict) -> dict:
     thrust = launcher.get("thrust")
 
     # --- Axis 1: Track Record (200) ---
+    # Confidence penalty for low launch count: scale by min(total_launches/10, 1)
     if total_launches > 0:
         success_rate = successful / total_launches
-        ax1 = _clamp(success_rate * 200, 0, 200)
+        confidence = min(total_launches / 10, 1.0)  # 10+ launches = full confidence
+        ax1 = _clamp(success_rate * 200 * confidence, 0, 200)
     else:
         success_rate = 0.0
         ax1 = 0
@@ -101,9 +103,12 @@ def score_launcher(launcher: dict) -> dict:
     ax2 = _clamp(consecutive * 2, 0, 200)
 
     # --- Axis 3: Payload Capacity (200) ---
+    # Log scale to prevent Starship-class rockets from making everything else 0
+    import math
     effective_leo = leo if leo else (gto * 2 if gto else 0)
     if effective_leo > 0:
-        ax3 = _clamp(effective_leo / 150, 0, 200)
+        # log2(30000) ≈ 14.9, log2(100) ≈ 6.6, log2(150000) ≈ 17.2
+        ax3 = _clamp((math.log2(effective_leo) / 15) * 200, 0, 200)
     else:
         ax3 = 0
 
