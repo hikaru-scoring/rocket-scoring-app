@@ -113,9 +113,13 @@ def score_launcher(launcher: dict) -> dict:
         ax3 = 0
 
     # --- Axis 4: Cost Efficiency (200) ---
+    # Log scale: $1,000/kg = 200pts, $5,000/kg = 150pts, $20,000/kg = 100pts, $100,000/kg = 50pts
     if launch_cost and effective_leo and effective_leo > 0:
         cost_per_kg = launch_cost / effective_leo
-        ax4 = _clamp(200 - (cost_per_kg / 50), 0, 200)
+        if cost_per_kg > 0:
+            ax4 = _clamp(200 - math.log10(cost_per_kg) * 50, 0, 200)
+        else:
+            ax4 = 200
     else:
         ax4 = 100  # neutral when data unavailable
 
