@@ -143,7 +143,7 @@ with tab_dash:
         for j, rocket in enumerate(company_rockets):
             with rocket_cols[j % 4]:
                 score = int(rocket["total"])
-                if st.button(f"\U0001f680 {rocket['name']}\n{score}/1000", key=f"rocket_btn_{rocket['name']}", use_container_width=True):
+                if st.button(f"\U0001f680 {rocket['name']}\n{score}/1000", key=f"rocket_btn_{j}_{rocket['name']}", use_container_width=True):
                     st.session_state["selected_rocket_detail"] = rocket["name"]
 
         selected_rocket_name = st.session_state.get("selected_rocket_detail")
