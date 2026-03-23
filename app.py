@@ -42,6 +42,10 @@ div[class*="embeddedAppMetaInfoBar"] { display: none !important; }
 # ---------------------------------------------------------------------------
 if "saved_rocket_data" not in st.session_state:
     st.session_state.saved_rocket_data = None
+if "selected_company" not in st.session_state:
+    st.session_state["selected_company"] = None
+if "selected_rocket_detail" not in st.session_state:
+    st.session_state["selected_rocket_detail"] = None
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -109,6 +113,136 @@ with tab_dash:
         "Comprehensive scoring of launch vehicles based on track record, reliability, payload, cost, and reusability.</p>",
         unsafe_allow_html=True,
     )
+
+    # --- Browse by Launch Provider ---
+    companies = {}
+    for r in all_scored:
+        family = r.get("family") or "Other"
+        if family not in companies:
+            companies[family] = []
+        companies[family].append(r)
+
+    company_order = sorted(companies.keys(), key=lambda c: max(r["total"] for r in companies[c]), reverse=True)
+
+    st.markdown("<div class='section-title'>Browse by Launch Provider</div>", unsafe_allow_html=True)
+
+    top_companies = company_order[:15]
+    comp_cols = st.columns(min(len(top_companies), 5))
+    for i, company in enumerate(top_companies):
+        with comp_cols[i % 5]:
+            if st.button(company, key=f"company_{company}", use_container_width=True):
+                st.session_state["selected_company"] = company
+                st.session_state["selected_rocket_detail"] = None
+
+    selected_company = st.session_state.get("selected_company")
+    if selected_company and selected_company in companies:
+        st.markdown(f"<div style='font-size:1.1em; font-weight:700; color:#1e3a8a; margin:15px 0 10px;'>{selected_company} Rockets</div>", unsafe_allow_html=True)
+        company_rockets = sorted(companies[selected_company], key=lambda r: r["total"], reverse=True)
+
+        rocket_cols = st.columns(min(len(company_rockets), 4))
+        for j, rocket in enumerate(company_rockets):
+            with rocket_cols[j % 4]:
+                score = int(rocket["total"])
+                if st.button(f"\U0001f680 {rocket['name']}\n{score}/1000", key=f"rocket_btn_{rocket['name']}", use_container_width=True):
+                    st.session_state["selected_rocket_detail"] = rocket["name"]
+
+        selected_rocket_name = st.session_state.get("selected_rocket_detail")
+        if selected_rocket_name:
+            detail = None
+            for r in all_scored:
+                if r["name"] == selected_rocket_name:
+                    detail = r
+                    break
+            if detail:
+                st.markdown(f"""
+                <div style="text-align:center; margin:10px 0;">
+                    <div style="font-size:14px; letter-spacing:2px; color:#666;">TOTAL SCORE</div>
+                    <div style="font-size:70px; font-weight:800; color:#2E7BE6; line-height:1;">
+                        {int(detail['total'])}
+                        <span style="font-size:28px; color:#BBB;">/ 1000</span>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+
+                cl_left, cl_right = st.columns([1.5, 1])
+                with cl_left:
+                    st.markdown("<div style='font-size:1.1em; font-weight:bold; color:#333; margin-bottom:5px;'>Intelligence Radar</div>", unsafe_allow_html=True)
+                    fig_r = render_radar_chart(detail, None, AXES_LABELS)
+                    st.plotly_chart(fig_r, use_container_width=True, config={"displayModeBar": False}, key=f"radar_browse_{detail['name']}")
+                with cl_right:
+                    st.markdown("<div style='font-size:0.9em; font-weight:bold; color:#333; margin-bottom:15px; border-left:3px solid #2E7BE6; padding-left:8px;'>SCORE METRICS</div>", unsafe_allow_html=True)
+                    for axis in AXES_LABELS:
+                        v = detail["axes"][axis]
+                        desc = LOGIC_DESC.get(axis, "")
+                        st.markdown(f"""
+                        <div style="background:#fff; padding:16px; border-radius:12px; margin-bottom:10px;
+                            border:1px solid #e0e0e0; border-left:8px solid #2E7BE6; box-shadow:2px 2px 5px rgba(0,0,0,0.07);">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                                <span style="font-size:1.3em; font-weight:800; color:#333;">{axis}</span>
+                                <span style="font-size:1.7em; font-weight:900; color:#2E7BE6;">{int(v)}</span>
+                            </div>
+                            <p style="font-size:1em; color:#777; margin:0;">{desc}</p>
+                        </div>""", unsafe_allow_html=True)
+
+                st.markdown("---")
+
+    # --- Launch Vehicle Timeline ---
+    st.markdown("<div class='section-title'>Launch Vehicle Timeline</div>", unsafe_allow_html=True)
+
+    timeline_years = []
+    timeline_scores = []
+    timeline_names = []
+    timeline_colors = []
+    timeline_sizes = []
+
+    for r in all_scored:
+        maiden = r.get("maiden_flight", "")
+        if maiden and len(maiden) >= 4:
+            try:
+                year = int(maiden[:4])
+                if 1950 <= year <= 2030:
+                    timeline_years.append(year)
+                    timeline_scores.append(int(r["total"]))
+                    timeline_names.append(f"{r['name']} ({year}): {int(r['total'])}/1000")
+                    score_val = r["total"]
+                    if score_val >= 700:
+                        timeline_colors.append("#10b981")
+                    elif score_val >= 500:
+                        timeline_colors.append("#2E7BE6")
+                    elif score_val >= 300:
+                        timeline_colors.append("#f59e0b")
+                    else:
+                        timeline_colors.append("#ef4444")
+                    timeline_sizes.append(max(8, min(25, r.get("total_launches", 1) / 20 + 5)))
+            except ValueError:
+                pass
+
+    if timeline_years:
+        fig_timeline = go.Figure()
+        fig_timeline.add_trace(go.Scatter(
+            x=timeline_years,
+            y=timeline_scores,
+            mode="markers",
+            marker=dict(
+                size=timeline_sizes,
+                color=timeline_colors,
+                line=dict(width=1, color="white"),
+            ),
+            text=timeline_names,
+            hoverinfo="text",
+            showlegend=False,
+        ))
+        fig_timeline.update_layout(
+            xaxis=dict(title="Maiden Flight Year", gridcolor="#f0f0f0", dtick=10),
+            yaxis=dict(title="ROCKET-1000 Score", range=[0, 1050], gridcolor="#f0f0f0"),
+            height=450,
+            margin=dict(l=60, r=20, t=20, b=60),
+            plot_bgcolor="white",
+            paper_bgcolor="white",
+            clickmode="none",
+            dragmode=False,
+        )
+        st.plotly_chart(fig_timeline, use_container_width=True, config={"displayModeBar": False, "staticPlot": True}, key="rocket_timeline")
 
     # --- Top 10 / Bottom 10 ---
     top_col, bot_col = st.columns(2)
