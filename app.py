@@ -24,6 +24,68 @@ def _load_scores_history():
             return json.load(f)
     return {}
 
+def render_score_delta(asset_name: str, current_total: int):
+    """前日比のスコア変動を表示する"""
+    history = _load_scores_history()
+    if not history:
+        return
+    dates = sorted(history.keys(), reverse=True)
+    prev_score = None
+    for d in dates:
+        s = history[d].get(asset_name)
+        if s is not None:
+            prev_score = s
+            break
+    if prev_score is None:
+        return
+    delta = current_total - prev_score
+    if delta > 0:
+        color, arrow = "#10b981", "&#9650;"
+    elif delta < 0:
+        color, arrow = "#ef4444", "&#9660;"
+    else:
+        color, arrow = "#94a3b8", "&#9644;"
+    st.markdown(
+        f'<div style="text-align:center; font-size:1.1em; font-weight:700; color:{color}; margin-top:-8px; margin-bottom:10px;">'
+        f'{arrow} {delta:+d} from last record ({prev_score})'
+        f'</div>',
+        unsafe_allow_html=True
+    )
+
+def render_daily_score_tracker(asset_name: str):
+    """scores_history.json からデイリースコア推移チャートを表示する"""
+    history = _load_scores_history()
+    if not history:
+        return
+    dates = sorted(history.keys())
+    values = []
+    valid_dates = []
+    for d in dates:
+        score = history[d].get(asset_name)
+        if score is not None:
+            valid_dates.append(d)
+            values.append(score)
+    if len(valid_dates) < 2:
+        return
+    fig_daily = go.Figure()
+    fig_daily.add_trace(go.Scatter(
+        x=valid_dates, y=values, mode='lines+markers',
+        name=asset_name,
+        line=dict(color='#2E7BE6', width=2),
+        marker=dict(size=5),
+        fill='tozeroy', fillcolor='rgba(46,123,230,0.05)'
+    ))
+    fig_daily.update_layout(
+        yaxis=dict(range=[0, 1000], title="Score"),
+        height=250,
+        margin=dict(l=0, r=0, t=10, b=0),
+        plot_bgcolor='white',
+        hovermode="x unified",
+        clickmode='none',
+        dragmode=False,
+    )
+    st.plotly_chart(fig_daily, use_container_width=True, config={"displayModeBar": False}, key=f"daily_tracker_{asset_name}")
+
 APP_TITLE = "ROCKET-1000 — Launch Vehicle Scoring Platform"
 st.set_page_config(page_title=APP_TITLE, layout="wide")
 
@@ -270,6 +332,8 @@ with tab_dash:
                     </div>
                     """, unsafe_allow_html=True)
 
+                render_score_delta(detail['name'], int(detail['total']))
+
                 cl_left, cl_right = st.columns([1.5, 1])
                 with cl_left:
                     st.markdown("<div style='font-size:1.1em; font-weight:bold; color:#333; margin-bottom:5px;'>Intelligence Radar</div>", unsafe_allow_html=True)
@@ -438,6 +502,8 @@ with tab_detail:
                 </div>
             </div>
             """, unsafe_allow_html=True)
+
+        render_score_delta(selected['name'], total)
 
         # --- I. Radar + II. Score Metrics ---
         col_radar, col_axes = st.columns([1.5, 1])
@@ -636,6 +702,10 @@ with tab_detail:
                     dragmode=False,
                 )
                 st.plotly_chart(fig_hist, use_container_width=True, config={"displayModeBar": False}, key="score_history_detail")
+
+        # --- V-b. Daily Score Tracker ---
+        st.markdown("<div class='section-title'>Daily Score Tracker</div>", unsafe_allow_html=True)
+        render_daily_score_tracker(selected["full_name"])
 
         # --- VI. Latest News ---
         st.markdown("<div class='section-title'>VI. Latest News</div>", unsafe_allow_html=True)
