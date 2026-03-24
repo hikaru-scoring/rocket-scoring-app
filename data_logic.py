@@ -185,6 +185,33 @@ def score_launcher(launcher: dict) -> dict:
     }
 
 
+@st.cache_data(ttl=3600, show_spinner=False)
+def fetch_rocket_news(rocket_name: str, max_items: int = 5) -> list:
+    """Fetch recent news articles for a rocket from Spaceflight News API."""
+    try:
+        # Search by rocket short name (e.g. "Falcon 9" not "SpaceX Falcon 9 Block 5")
+        search_term = rocket_name.split("(")[0].strip()
+        resp = requests.get(
+            "https://api.spaceflightnewsapi.net/v4/articles/",
+            params={"limit": max_items, "search": search_term},
+            timeout=10,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        results = []
+        for article in data.get("results", []):
+            results.append({
+                "title": article.get("title", ""),
+                "url": article.get("url", ""),
+                "source": article.get("news_site", ""),
+                "date": (article.get("published_at") or "")[:10],
+                "image": article.get("image_url", ""),
+            })
+        return results
+    except Exception:
+        return []
+
+
 def score_all_launchers() -> list:
     """Score all launchers with at least 1 launch, sorted by total desc."""
     raw = fetch_all_launchers()

@@ -8,7 +8,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
-from data_logic import AXES_LABELS, LOGIC_DESC, score_all_launchers
+from data_logic import AXES_LABELS, LOGIC_DESC, score_all_launchers, fetch_rocket_news
 from ui_components import inject_css, render_radar_chart
 
 SCORES_HISTORY_FILE = os.path.join(os.path.dirname(__file__), "scores_history.json")
@@ -541,8 +541,23 @@ with tab_detail:
                 unsafe_allow_html=True,
             )
 
-        # --- IV. Score Comparison ---
-        st.markdown("<div class='section-title'>IV. Score Comparison</div>", unsafe_allow_html=True)
+        # --- IV. Related News ---
+        st.markdown("<div class='section-title'>IV. Latest News</div>", unsafe_allow_html=True)
+        news = fetch_rocket_news(selected["name"], max_items=5)
+        if news:
+            for article in news:
+                st.markdown(
+                    f'<div style="padding:10px 0; border-bottom:1px solid #F0F0F0;">'
+                    f'<a href="{article["url"]}" target="_blank" style="font-size:0.95em; font-weight:600; color:#1e3a8a; text-decoration:none;">{article["title"]}</a>'
+                    f'<div style="font-size:0.8em; color:#999; margin-top:3px;">{article["source"]} · {article["date"]}</div>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+        else:
+            st.caption("No recent news available.")
+
+        # --- V. Score Comparison ---
+        st.markdown("<div class='section-title'>V. Score Comparison</div>", unsafe_allow_html=True)
 
         sc1, sc2, sc3 = st.columns(3)
 
@@ -588,23 +603,22 @@ with tab_detail:
                     hist_dates.append(d)
                     hist_scores.append(s)
             if len(hist_dates) >= 1:
-                st.markdown("<div class='section-title'>V. Score History</div>", unsafe_allow_html=True)
+                st.markdown("<div class='section-title'>VI. Score History</div>", unsafe_allow_html=True)
                 fig_hist = go.Figure()
                 fig_hist.add_trace(go.Scatter(
                     x=hist_dates, y=hist_scores,
-                    mode="lines+markers",
-                    line=dict(color="#2E7BE6", width=3),
-                    marker=dict(size=8, color="#2E7BE6"),
-                    text=[f"{d}: {s}" for d, s in zip(hist_dates, hist_scores)],
-                    hoverinfo="text",
+                    mode="lines",
+                    line=dict(color="#2E7BE6", width=2),
+                    fill="tozeroy", fillcolor="rgba(46,123,230,0.05)",
                 ))
                 fig_hist.update_layout(
-                    yaxis=dict(title="Score", range=[0, 1050], gridcolor="#f0f0f0"),
-                    xaxis=dict(title="Date", gridcolor="#f0f0f0"),
-                    height=350,
-                    margin=dict(l=60, r=20, t=20, b=60),
+                    yaxis=dict(range=[0, 1000], title="Score"),
+                    height=250,
+                    margin=dict(l=0, r=0, t=10, b=0),
                     plot_bgcolor="white",
-                    paper_bgcolor="white",
+                    hovermode="x unified",
+                    clickmode="none",
+                    dragmode=False,
                 )
                 st.plotly_chart(fig_hist, use_container_width=True, config={"displayModeBar": False}, key="score_history_detail")
 
