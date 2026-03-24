@@ -1,18 +1,6 @@
 """Methodology page — accessed via Streamlit sidebar navigation."""
 import streamlit as st
 
-st.set_page_config(page_title="Methodology — ROCKET-1000", layout="wide")
-
-st.markdown("""
-<style>
-header[data-testid="stHeader"] { display: none !important; }
-footer { display: none !important; }
-#MainMenu { display: none !important; }
-.stDeployButton { display: none !important; }
-div[class*="stToolbar"] { display: none !important; }
-</style>
-""", unsafe_allow_html=True)
-
 st.markdown("""
 <div style="text-align:center; margin:20px 0 30px;">
     <div style="font-size:2.5em; font-weight:900; color:#2E7BE6; letter-spacing:-1px;">ROCKET-1000</div>
