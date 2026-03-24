@@ -541,23 +541,8 @@ with tab_detail:
                 unsafe_allow_html=True,
             )
 
-        # --- IV. Related News ---
-        st.markdown("<div class='section-title'>IV. Latest News</div>", unsafe_allow_html=True)
-        news = fetch_rocket_news(selected["name"], max_items=5)
-        if news:
-            for article in news:
-                st.markdown(
-                    f'<div style="padding:10px 0; border-bottom:1px solid #F0F0F0;">'
-                    f'<a href="{article["url"]}" target="_blank" style="font-size:0.95em; font-weight:600; color:#1e3a8a; text-decoration:none;">{article["title"]}</a>'
-                    f'<div style="font-size:0.8em; color:#999; margin-top:3px;">{article["source"]} · {article["date"]}</div>'
-                    f'</div>',
-                    unsafe_allow_html=True,
-                )
-        else:
-            st.caption("No recent news available.")
-
-        # --- V. Score Comparison ---
-        st.markdown("<div class='section-title'>V. Score Comparison</div>", unsafe_allow_html=True)
+        # --- IV. Score Comparison ---
+        st.markdown("<div class='section-title'>IV. Score Comparison</div>", unsafe_allow_html=True)
 
         sc1, sc2, sc3 = st.columns(3)
 
@@ -603,7 +588,7 @@ with tab_detail:
                     hist_dates.append(d)
                     hist_scores.append(s)
             if len(hist_dates) >= 1:
-                st.markdown("<div class='section-title'>VI. Score History</div>", unsafe_allow_html=True)
+                st.markdown("<div class='section-title'>V. Score History</div>", unsafe_allow_html=True)
                 fig_hist = go.Figure()
                 fig_hist.add_trace(go.Scatter(
                     x=hist_dates, y=hist_scores,
@@ -621,6 +606,21 @@ with tab_detail:
                     dragmode=False,
                 )
                 st.plotly_chart(fig_hist, use_container_width=True, config={"displayModeBar": False}, key="score_history_detail")
+
+        # --- VI. Latest News ---
+        st.markdown("<div class='section-title'>VI. Latest News</div>", unsafe_allow_html=True)
+        news = fetch_rocket_news(selected["name"], max_items=5)
+        if news:
+            for article in news:
+                st.markdown(
+                    f'<div style="padding:10px 0; border-bottom:1px solid #F0F0F0;">'
+                    f'<a href="{article["url"]}" target="_blank" style="font-size:0.95em; font-weight:600; color:#1e3a8a; text-decoration:none;">{article["title"]}</a>'
+                    f'<div style="font-size:0.8em; color:#999; margin-top:3px;">{article["source"]} · {article["date"]}</div>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+        else:
+            st.caption("No recent news available.")
 
 # ===================================================================
 # RANKINGS TAB
