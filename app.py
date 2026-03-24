@@ -1,6 +1,8 @@
 # app.py
 """ROCKET-1000 — Launch Vehicle Scoring Platform."""
 import io
+import json
+import os
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
@@ -8,6 +10,14 @@ import streamlit as st
 
 from data_logic import AXES_LABELS, LOGIC_DESC, score_all_launchers
 from ui_components import inject_css, render_radar_chart
+
+SCORES_HISTORY_FILE = os.path.join(os.path.dirname(__file__), "scores_history.json")
+
+def _load_scores_history():
+    if os.path.exists(SCORES_HISTORY_FILE):
+        with open(SCORES_HISTORY_FILE, "r") as f:
+            return json.load(f)
+    return {}
 
 APP_TITLE = "ROCKET-1000 — Launch Vehicle Scoring Platform"
 st.set_page_config(page_title=APP_TITLE, layout="wide")
@@ -496,7 +506,7 @@ with tab_detail:
                     elif axis == "Reliability Streak":
                         st.markdown("**Formula:** `Consecutive Successful Launches x 2 (capped at 200)`\n\n**Source:** Launch Library 2 API")
                     elif axis == "Payload Capacity":
-                        st.markdown("**Formula:** `(log2(LEO Capacity) / 15) x 200 (capped at 200)`\n\nLogarithmic scale prevents heavy-lift rockets from making all others look like zero.\n\n**Source:** Launch Library 2 API")
+                        st.markdown("**Formula:** `75% x (log2(LEO kg) / 15) x 200 + 25% x (log2(Thrust kN) / 17) x 200`\n\nPayload capacity (75%) and thrust power (25%), both on logarithmic scale. If only one data point is available, that component is used at 100%.\n\n**Source:** Launch Library 2 API")
                     elif axis == "Cost Efficiency":
                         st.markdown("**Formula:** `(5.5 - log10(Cost per kg)) x 75 (capped at 200)`\n\nLower cost per kilogram = higher score. Default 100 when cost data is unavailable.\n\n**Source:** Launch Library 2 API")
                     elif axis == "Reusability & Innovation":
@@ -564,6 +574,39 @@ with tab_detail:
             f'<div style="font-size:18px; font-weight:900;"><span style="color:#ef4444;">{worst1} ({worst1_val})</span></div></div>',
             unsafe_allow_html=True,
         )
+
+        # --- V. Score History ---
+        history = _load_scores_history()
+        if history:
+            rocket_full = selected["full_name"]
+            dates = sorted(history.keys())
+            hist_dates = []
+            hist_scores = []
+            for d in dates:
+                s = history[d].get(rocket_full)
+                if s is not None:
+                    hist_dates.append(d)
+                    hist_scores.append(s)
+            if len(hist_dates) >= 1:
+                st.markdown("<div class='section-title'>V. Score History</div>", unsafe_allow_html=True)
+                fig_hist = go.Figure()
+                fig_hist.add_trace(go.Scatter(
+                    x=hist_dates, y=hist_scores,
+                    mode="lines+markers",
+                    line=dict(color="#2E7BE6", width=3),
+                    marker=dict(size=8, color="#2E7BE6"),
+                    text=[f"{d}: {s}" for d, s in zip(hist_dates, hist_scores)],
+                    hoverinfo="text",
+                ))
+                fig_hist.update_layout(
+                    yaxis=dict(title="Score", range=[0, 1050], gridcolor="#f0f0f0"),
+                    xaxis=dict(title="Date", gridcolor="#f0f0f0"),
+                    height=350,
+                    margin=dict(l=60, r=20, t=20, b=60),
+                    plot_bgcolor="white",
+                    paper_bgcolor="white",
+                )
+                st.plotly_chart(fig_hist, use_container_width=True, config={"displayModeBar": False}, key="score_history_detail")
 
 # ===================================================================
 # RANKINGS TAB
@@ -739,11 +782,11 @@ with tab_method:
         ---
 
         #### 3. Payload Capacity (200 pts)
-        **What:** Maximum payload to Low Earth Orbit (LEO).
+        **What:** Payload to LEO (75%) combined with thrust power (25%).
 
-        **Formula:** `(log2(LEO kg) / 15) x 200`
+        **Formula:** `0.75 x (log2(LEO kg) / 15) x 200 + 0.25 x (log2(Thrust kN) / 17) x 200`
 
-        Logarithmic scale so that heavy-lift rockets (Starship, SLS) don't make everything else look like zero. If LEO data is missing, GTO x 2 is used as a proxy.
+        Both use logarithmic scale so heavy-lift rockets don't make everything else look like zero. If LEO data is missing, GTO x 2 is used as a proxy. If only one data point is available, that component is used at 100%.
         """)
     with m2:
         st.markdown("""

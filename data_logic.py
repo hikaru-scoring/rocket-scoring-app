@@ -19,7 +19,7 @@ AXES_LABELS = [
 LOGIC_DESC = {
     "Track Record": "Historical success rate across all launches",
     "Reliability Streak": "Consecutive successful launches",
-    "Payload Capacity": "Maximum payload to Low Earth Orbit",
+    "Payload Capacity": "Payload to LEO (75%) and thrust power (25%)",
     "Cost Efficiency": "Cost per kilogram to orbit",
     "Reusability & Innovation": "Landing capability and reuse track record",
 }
@@ -108,12 +108,26 @@ def score_launcher(launcher: dict) -> dict:
     ax2 = _clamp(consecutive * 2, 0, 200)
 
     # --- Axis 3: Payload Capacity (200) ---
-    # Log scale to prevent Starship-class rockets from making everything else 0
+    # 75% payload (LEO) + 25% thrust, both on log scale
     import math
     effective_leo = leo if leo else (gto * 2 if gto else 0)
+    thrust_kn = _to_num(thrust) if thrust else 0
+
+    payload_score = 0
     if effective_leo > 0:
-        # log2(30000) ≈ 14.9, log2(100) ≈ 6.6, log2(150000) ≈ 17.2
-        ax3 = _clamp((math.log2(effective_leo) / 15) * 200, 0, 200)
+        payload_score = _clamp((math.log2(effective_leo) / 15) * 200, 0, 200)
+
+    thrust_score = 0
+    if thrust_kn > 0:
+        # log2(12)≈3.6→42, log2(2400)≈11.2→132, log2(73550)≈16.2→191
+        thrust_score = _clamp((math.log2(thrust_kn) / 17) * 200, 0, 200)
+
+    if effective_leo > 0 and thrust_kn > 0:
+        ax3 = payload_score * 0.75 + thrust_score * 0.25
+    elif effective_leo > 0:
+        ax3 = payload_score
+    elif thrust_kn > 0:
+        ax3 = thrust_score
     else:
         ax3 = 0
 
