@@ -411,22 +411,15 @@ with tab_detail:
             plot_bgcolor="white",
             paper_bgcolor="white",
         )
-        st.markdown("<p style='color:#94a3b8; font-size:0.8em; margin-bottom:4px;'>Click a dot to select that rocket.</p>", unsafe_allow_html=True)
-        timeline_event = st.plotly_chart(fig_timeline, use_container_width=True, config={"displayModeBar": False}, on_select="rerun", key="detail_rocket_timeline")
-
-        # Handle click on timeline dot
-        if timeline_event:
-            try:
-                points = timeline_event.selection.points
-                if points and len(points) > 0:
-                    clicked_idx = points[0].point_index
-                    if 0 <= clicked_idx < len(timeline_full_names):
-                        clicked_name = timeline_full_names[clicked_idx]
-                        st.session_state["rocket_select"] = clicked_name
-            except Exception:
-                pass
+        st.plotly_chart(fig_timeline, use_container_width=True, config={"displayModeBar": False, "staticPlot": True}, key="detail_rocket_timeline")
 
     rocket_names = [r["full_name"] for r in all_scored]
+    search_query = st.text_input("Search rockets", "", placeholder="e.g. Falcon, Soyuz, Starship...", key="detail_search")
+    if search_query:
+        q = search_query.lower()
+        rocket_names = [n for n in rocket_names if q in n.lower()]
+        if not rocket_names:
+            rocket_names = [r["full_name"] for r in all_scored]
     selected_name = st.selectbox("Select a rocket", rocket_names, key="rocket_select")
     selected = next((r for r in all_scored if r["full_name"] == selected_name), None)
 
