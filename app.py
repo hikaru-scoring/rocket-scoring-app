@@ -360,6 +360,7 @@ with tab_detail:
     timeline_years = []
     timeline_scores = []
     timeline_names = []
+    timeline_full_names = []
     timeline_colors = []
     timeline_sizes = []
 
@@ -372,6 +373,7 @@ with tab_detail:
                     timeline_years.append(year)
                     timeline_scores.append(int(r["total"]))
                     timeline_names.append(f"{r['name']} ({year}): {int(r['total'])}/1000")
+                    timeline_full_names.append(r["full_name"])
                     score_val = r["total"]
                     if score_val >= 700:
                         timeline_colors.append("#10b981")
@@ -397,6 +399,7 @@ with tab_detail:
                 line=dict(width=1, color="white"),
             ),
             text=timeline_names,
+            customdata=timeline_full_names,
             hoverinfo="text",
             showlegend=False,
         ))
@@ -407,10 +410,21 @@ with tab_detail:
             margin=dict(l=60, r=20, t=20, b=60),
             plot_bgcolor="white",
             paper_bgcolor="white",
-            clickmode="none",
-            dragmode=False,
         )
-        st.plotly_chart(fig_timeline, use_container_width=True, config={"displayModeBar": False}, key="detail_rocket_timeline")
+        st.markdown("<p style='color:#94a3b8; font-size:0.8em; margin-bottom:4px;'>Click a dot to select that rocket.</p>", unsafe_allow_html=True)
+        timeline_event = st.plotly_chart(fig_timeline, use_container_width=True, config={"displayModeBar": False}, on_select="rerun", key="detail_rocket_timeline")
+
+        # Handle click on timeline dot
+        if timeline_event:
+            try:
+                points = timeline_event.selection.points
+                if points and len(points) > 0:
+                    clicked_idx = points[0].point_index
+                    if 0 <= clicked_idx < len(timeline_full_names):
+                        clicked_name = timeline_full_names[clicked_idx]
+                        st.session_state["rocket_select"] = clicked_name
+            except Exception:
+                pass
 
     rocket_names = [r["full_name"] for r in all_scored]
     selected_name = st.selectbox("Select a rocket", rocket_names, key="rocket_select")
