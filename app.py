@@ -354,65 +354,6 @@ with tab_dash:
 # ROCKET DETAIL TAB
 # ===================================================================
 with tab_detail:
-    # --- Launch Vehicle Timeline ---
-    st.markdown("<div class='section-title'>Launch Vehicle Timeline</div>", unsafe_allow_html=True)
-
-    timeline_years = []
-    timeline_scores = []
-    timeline_names = []
-    timeline_full_names = []
-    timeline_colors = []
-    timeline_sizes = []
-
-    for r in all_scored:
-        maiden = r.get("maiden_flight", "")
-        if maiden and len(maiden) >= 4:
-            try:
-                year = int(maiden[:4])
-                if 1950 <= year <= 2030:
-                    timeline_years.append(year)
-                    timeline_scores.append(int(r["total"]))
-                    timeline_names.append(f"{r['name']} ({year}): {int(r['total'])}/1000")
-                    timeline_full_names.append(r["full_name"])
-                    score_val = r["total"]
-                    if score_val >= 700:
-                        timeline_colors.append("#10b981")
-                    elif score_val >= 500:
-                        timeline_colors.append("#2E7BE6")
-                    elif score_val >= 300:
-                        timeline_colors.append("#f59e0b")
-                    else:
-                        timeline_colors.append("#ef4444")
-                    timeline_sizes.append(max(8, min(25, r.get("total_launches", 1) / 20 + 5)))
-            except ValueError:
-                pass
-
-    if timeline_years:
-        fig_timeline = go.Figure()
-        fig_timeline.add_trace(go.Scatter(
-            x=timeline_years,
-            y=timeline_scores,
-            mode="markers",
-            marker=dict(
-                size=timeline_sizes,
-                color=timeline_colors,
-                line=dict(width=1, color="white"),
-            ),
-            text=timeline_names,
-            customdata=timeline_full_names,
-            hoverinfo="text",
-            showlegend=False,
-        ))
-        fig_timeline.update_layout(
-            xaxis=dict(title="Maiden Flight Year", gridcolor="#f0f0f0", dtick=10),
-            yaxis=dict(title="ROCKET-1000 Score", range=[0, 1050], gridcolor="#f0f0f0"),
-            height=450,
-            margin=dict(l=60, r=20, t=20, b=60),
-            plot_bgcolor="white",
-            paper_bgcolor="white",
-        )
-        st.plotly_chart(fig_timeline, use_container_width=True, config={"displayModeBar": False, "staticPlot": True}, key="detail_rocket_timeline")
-
     rocket_names = [r["full_name"] for r in all_scored]
     search_query = st.text_input("Search rockets", "", placeholder="e.g. Falcon, Soyuz, Starship...", key="detail_search")
     if search_query:
