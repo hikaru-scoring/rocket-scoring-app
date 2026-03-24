@@ -98,6 +98,26 @@ def _fmt_mass(val):
     return f"{val:.0f}kg"
 
 
+def estimate_premium_rate(success_rate_pct, total_launches, consecutive, reusable_flag):
+    """Estimate insurance premium rate based on rocket stats."""
+    failure_rate = (100 - success_rate_pct) / 100
+    base_rate = failure_rate * 1.75
+    if total_launches < 5:
+        base_rate += 0.10
+    elif total_launches < 10:
+        base_rate += 0.05
+    elif total_launches < 20:
+        base_rate += 0.02
+    streak_discount = min(consecutive * 0.0005, 0.015)
+    base_rate -= streak_discount
+    if reusable_flag:
+        if total_launches >= 50:
+            base_rate *= 0.90
+        else:
+            base_rate *= 1.05
+    return max(0.015, min(base_rate, 0.25))
+
+
 COUNTRY_FLAG = {
     "USA": "US", "RUS": "RU", "CHN": "CN", "IND": "IN", "JPN": "JP",
     "FRA": "FR", "EU": "EU", "ISR": "IL", "KOR": "KR", "IRN": "IR",
@@ -125,7 +145,7 @@ if not all_scored:
 # ---------------------------------------------------------------------------
 # Tabs
 # ---------------------------------------------------------------------------
-tab_dash, tab_detail, tab_rank, tab_method = st.tabs(["Dashboard", "Rocket Detail", "Rankings", "Methodology"])
+tab_dash, tab_detail, tab_rank, tab_ins = st.tabs(["Dashboard", "Rocket Detail", "Rankings", "Insurance"])
 
 # ===================================================================
 # DASHBOARD TAB
@@ -536,36 +556,7 @@ with tab_detail:
         # --- Insurance Premium Estimator ---
         st.markdown("<div class='section-title'>III-B. Insurance Premium Estimator</div>", unsafe_allow_html=True)
 
-        def _estimate_premium_rate(success_rate_pct, total_launches, consecutive, reusable_flag):
-            """Estimate insurance premium rate based on rocket stats."""
-            # Base rate from failure rate (typically 1.5-2x failure rate)
-            failure_rate = (100 - success_rate_pct) / 100
-            base_rate = failure_rate * 1.75
-
-            # Confidence adjustment: fewer launches = higher uncertainty = higher rate
-            if total_launches < 5:
-                base_rate += 0.10  # +10% surcharge
-            elif total_launches < 10:
-                base_rate += 0.05  # +5% surcharge
-            elif total_launches < 20:
-                base_rate += 0.02  # +2% surcharge
-
-            # Consecutive success discount (max -1.5%)
-            streak_discount = min(consecutive * 0.0005, 0.015)
-            base_rate -= streak_discount
-
-            # Reusability factor
-            if reusable_flag:
-                if total_launches >= 50:
-                    base_rate *= 0.90  # 10% discount (proven reusable)
-                else:
-                    base_rate *= 1.05  # 5% surcharge (unproven reuse)
-
-            # Floor and ceiling
-            base_rate = max(0.015, min(base_rate, 0.25))  # 1.5% to 25%
-            return base_rate
-
-        est_rate = _estimate_premium_rate(
+        est_rate = estimate_premium_rate(
             selected["success_rate"],
             selected["total_launches"],
             selected.get("consecutive_successes", 0),
@@ -823,95 +814,152 @@ with tab_rank:
     st.plotly_chart(fig_stack, use_container_width=True, config={"displayModeBar": False}, key="rank_axis_breakdown")
 
 # ===================================================================
-# METHODOLOGY TAB
+# INSURANCE TAB
 # ===================================================================
-with tab_method:
-    st.markdown("""
-    <div style="text-align:center; margin:20px 0 30px;">
-        <div style="font-size:2.5em; font-weight:900; color:#2E7BE6; letter-spacing:-1px;">ROCKET-1000</div>
-        <div style="font-size:1.2em; color:#64748b;">Scoring Methodology</div>
-    </div>
-    """, unsafe_allow_html=True)
+with tab_ins:
+    st.markdown(
+        "<div style='font-size:1.5em; font-weight:900; color:#1e3a8a; margin-bottom:5px;'>"
+        "Insurance Premium Estimator</div>"
+        "<p style='color:#64748b; margin-bottom:20px;'>"
+        "Estimate launch insurance premiums for all rockets based on failure rate, launch confidence, streak, and reusability.</p>",
+        unsafe_allow_html=True,
+    )
 
-    st.markdown("""
-    ### What is ROCKET-1000?
+    ins_payload = st.number_input(
+        "Payload Value ($ million)",
+        min_value=1, max_value=2000, value=200, step=10,
+        key="ins_tab_payload",
+    )
 
-    ROCKET-1000 is a multi-dimensional scoring framework that evaluates every launch vehicle on the **same 0 to 1,000 scale**.
-    Each rocket is scored across **5 axes**, each worth a maximum of **200 points**.
+    # Build insurance data for all rockets
+    ins_data = []
+    for r in all_scored:
+        rate = estimate_premium_rate(
+            r["success_rate"],
+            r["total_launches"],
+            r.get("consecutive_successes", 0),
+            r["reusable"],
+        )
+        premium = ins_payload * rate
+        ins_data.append({
+            "rocket": r,
+            "rate": rate,
+            "premium": premium,
+        })
 
-    This is not a recommendation to use or invest in any launch provider. It is a screening and comparison tool.
-    """)
+    ins_data.sort(key=lambda x: x["rate"])
 
-    st.markdown("---")
+    # Summary cards
+    lowest = ins_data[0]
+    highest = ins_data[-1]
+    avg_rate = sum(d["rate"] for d in ins_data) / len(ins_data)
 
-    # Axis explanations
-    m1, m2 = st.columns(2)
-    with m1:
-        st.markdown("""
-        #### 1. Track Record (200 pts)
-        **What:** Historical launch success rate, adjusted for confidence.
+    s1, s2, s3 = st.columns(3)
+    s1.markdown(
+        f"""<div style="background:#f0fdf4; padding:20px; border-radius:12px; text-align:center; border:1px solid #d1fae5;">
+            <div style="font-size:0.7em; font-weight:700; color:#10b981; letter-spacing:1px;">LOWEST RATE</div>
+            <div style="font-size:2em; font-weight:900; color:#10b981;">{lowest['rate']*100:.1f}%</div>
+            <div style="font-size:0.85em; color:#64748b;">{lowest['rocket']['full_name']}</div>
+        </div>""",
+        unsafe_allow_html=True,
+    )
+    s2.markdown(
+        f"""<div style="background:#fff; padding:20px; border-radius:12px; text-align:center; border:1px solid #e2e8f0;">
+            <div style="font-size:0.7em; font-weight:700; color:#94a3b8; letter-spacing:1px;">AVERAGE RATE</div>
+            <div style="font-size:2em; font-weight:900; color:#2E7BE6;">{avg_rate*100:.1f}%</div>
+            <div style="font-size:0.85em; color:#64748b;">{len(ins_data)} rockets</div>
+        </div>""",
+        unsafe_allow_html=True,
+    )
+    s3.markdown(
+        f"""<div style="background:#fef2f2; padding:20px; border-radius:12px; text-align:center; border:1px solid #fecaca;">
+            <div style="font-size:0.7em; font-weight:700; color:#ef4444; letter-spacing:1px;">HIGHEST RATE</div>
+            <div style="font-size:2em; font-weight:900; color:#ef4444;">{highest['rate']*100:.1f}%</div>
+            <div style="font-size:0.85em; color:#64748b;">{highest['rocket']['full_name']}</div>
+        </div>""",
+        unsafe_allow_html=True,
+    )
 
-        **Formula:** `(Successful / Total) x 200 x Confidence`
+    st.markdown("<div class='section-title'>Premium Rate Ranking</div>", unsafe_allow_html=True)
 
-        Confidence = min(Total Launches / 10, 1.0). Rockets with fewer than 10 launches are penalized to prevent a rocket with 2/2 successes from outscoring one with 190/200.
+    # CSV export
+    ins_export = []
+    for idx, d in enumerate(ins_data, 1):
+        r = d["rocket"]
+        ins_export.append({
+            "Rank": idx,
+            "Rocket": r["full_name"],
+            "Premium Rate (%)": round(d["rate"] * 100, 2),
+            f"Est. Premium ($M, payload ${ins_payload}M)": round(d["premium"], 2),
+            "ROCKET-1000 Score": int(r["total"]),
+            "Success Rate (%)": r["success_rate"],
+            "Total Launches": r["total_launches"],
+            "Consecutive Successes": r.get("consecutive_successes", 0),
+            "Reusable": r["reusable"],
+            "Country": r.get("country_code", ""),
+        })
+    csv_ins_buf = io.StringIO()
+    pd.DataFrame(ins_export).to_csv(csv_ins_buf, index=False)
+    st.download_button("Download CSV", csv_ins_buf.getvalue(), "rocket_insurance_estimates.csv", "text/csv", key="btn_csv_ins")
 
-        ---
+    # Ranked list
+    for idx, d in enumerate(ins_data, 1):
+        r = d["rocket"]
+        rate = d["rate"]
+        premium = d["premium"]
+        rate_color = "#10b981" if rate < 0.05 else "#f59e0b" if rate < 0.10 else "#ef4444"
+        country = r.get("country_code", "")
+        country_tag = f"<span style='font-size:0.7em; color:#94a3b8; margin-left:6px;'>{country}</span>" if country else ""
 
-        #### 2. Reliability Streak (200 pts)
-        **What:** Current run of consecutive successful launches.
+        st.markdown(
+            f"""
+            <div style="display:flex; align-items:center; padding:14px 20px; background:#fff; border-radius:12px; margin-bottom:8px; border:1px solid #e2e8f0; box-shadow:0 1px 3px rgba(0,0,0,0.04);">
+                <div style="font-size:1.4em; font-weight:900; color:#94a3b8; width:40px;">#{idx}</div>
+                <div style="flex:1;">
+                    <div style="font-size:1.05em; font-weight:700; color:#1e293b;">{r['full_name']}{country_tag}</div>
+                    <span style="font-size:0.75em; background:#2E7BE6; color:#fff; padding:2px 8px; border-radius:20px;">{r['total_launches']} launches</span>
+                    <span style="font-size:0.75em; background:{'#10b981' if r['reusable'] else '#94a3b8'}; color:#fff; padding:2px 8px; border-radius:20px; margin-left:4px;">
+                        {"Reusable" if r['reusable'] else "Expendable"}
+                    </span>
+                    <span style="font-size:0.75em; color:#64748b; margin-left:8px;">Score: {int(r['total'])}</span>
+                </div>
+                <div style="text-align:right; min-width:160px;">
+                    <div style="font-size:1.3em; font-weight:900; color:{rate_color};">{rate*100:.1f}%</div>
+                    <div style="font-size:0.85em; color:#64748b;">Est. ${premium:.1f}M</div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
-        **Formula:** `Consecutive Successes x 2 (capped at 200)`
+    # Rate distribution chart
+    st.markdown("<div class='section-title'>Premium Rate Distribution</div>", unsafe_allow_html=True)
+    rate_colors = ["#10b981" if d["rate"] < 0.05 else "#f59e0b" if d["rate"] < 0.10 else "#ef4444" for d in ins_data]
+    fig_ins = go.Figure()
+    fig_ins.add_trace(go.Bar(
+        x=[d["rocket"]["name"] for d in ins_data],
+        y=[d["rate"] * 100 for d in ins_data],
+        marker_color=rate_colors,
+        text=[f'{d["rate"]*100:.1f}%' for d in ins_data],
+        textposition="outside",
+    ))
+    fig_ins.update_layout(
+        yaxis=dict(title="Premium Rate (%)", range=[0, 30]),
+        xaxis_tickangle=-45,
+        height=500,
+        margin=dict(l=0, r=0, t=10, b=150),
+        plot_bgcolor="white",
+        clickmode="none",
+        dragmode=False,
+    )
+    st.plotly_chart(fig_ins, use_container_width=True, config={"displayModeBar": False}, key="ins_rate_dist")
 
-        100 consecutive successes = perfect score. A single failure resets this to zero.
-
-        ---
-
-        #### 3. Payload Capacity (200 pts)
-        **What:** Payload to LEO (75%) combined with thrust power (25%).
-
-        **Formula:** `0.75 x (log2(LEO kg) / 15) x 200 + 0.25 x (log2(Thrust kN) / 17) x 200`
-
-        Both use logarithmic scale so heavy-lift rockets don't make everything else look like zero. If LEO data is missing, GTO x 2 is used as a proxy. If only one data point is available, that component is used at 100%.
-        """)
-    with m2:
-        st.markdown("""
-        #### 4. Cost Efficiency (200 pts)
-        **What:** Cost per kilogram to orbit.
-
-        **Formula:** `(5.5 - log10(cost/kg)) x 75 (capped at 200)`
-
-        Lower cost per kg = higher score. When cost data is unavailable (common for older rockets), a neutral score of 100 is assigned.
-
-        ---
-
-        #### 5. Reusability & Innovation (200 pts)
-        **What:** Landing capability and reuse track record.
-
-        **Formula:** `Base + Landing Success Rate x 100`
-
-        - Reusable rockets start at 100 points
-        - Expendable rockets start at 50 points
-        - Landing success rate adds up to 100 bonus points
-
-        A fully reusable rocket with 100% landing success = 200 points.
-        """)
-
-    st.markdown("---")
-
-    st.markdown("""
-    ### Data Source
-
-    All launch data comes from the **Launch Library 2 API** (thespacedevs.com), which aggregates information from official space agency records and public sources.
-
-    Only rockets with **at least 1 launch** are scored.
-
-    ### Limitations
-
-    - **Cost data** is missing for many rockets, resulting in a neutral 100/200 score
-    - **New rockets** with few launches receive a confidence penalty on Track Record
-    - **Landing data** may not capture all attempted recoveries
-    - Scores update when the API data updates (cached for 1 hour)
-    """)
+    st.markdown(
+        "<p style='text-align:center; color:#94a3b8; font-size:0.8em; margin-top:10px;'>"
+        "Estimates based on historical failure rate, launch count confidence, streak discount, and reusability factor. "
+        "Actual premiums vary by mission profile, orbit type, satellite value, and market conditions.</p>",
+        unsafe_allow_html=True,
+    )
 
 # ---------------------------------------------------------------------------
 # Disclaimer
