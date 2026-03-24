@@ -143,7 +143,7 @@ with tab_dash:
         for j, rocket in enumerate(company_rockets):
             with rocket_cols[j % 4]:
                 score = int(rocket["total"])
-                if st.button(f"\U0001f680 {rocket['name']}\n{score}/1000", key=f"rocket_btn_{j}_{rocket['name']}", use_container_width=True):
+                if st.button(f"\U0001f680 {rocket['name']}\n{score}/1000", key=f"rocket_btn_{selected_company}_{j}_{rocket['name']}", use_container_width=True):
                     st.session_state["selected_rocket_detail"] = rocket["name"]
 
         selected_rocket_name = st.session_state.get("selected_rocket_detail")
@@ -168,7 +168,7 @@ with tab_dash:
                 with cl_left:
                     st.markdown("<div style='font-size:1.1em; font-weight:bold; color:#333; margin-bottom:5px;'>Intelligence Radar</div>", unsafe_allow_html=True)
                     fig_r = render_radar_chart(detail, None, AXES_LABELS)
-                    st.plotly_chart(fig_r, use_container_width=True, config={"displayModeBar": False}, key=f"radar_browse_{detail['name']}")
+                    st.plotly_chart(fig_r, use_container_width=True, config={"displayModeBar": False}, key=f"radar_browse_{selected_company}_{detail['name']}")
                 with cl_right:
                     st.markdown("<div style='font-size:0.9em; font-weight:bold; color:#333; margin-bottom:15px; border-left:3px solid #2E7BE6; padding-left:8px;'>SCORE METRICS</div>", unsafe_allow_html=True)
                     for axis in AXES_LABELS:
