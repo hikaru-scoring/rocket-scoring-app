@@ -201,19 +201,21 @@ def main():
         for month_key, (date_str, score) in snapshots.items():
             # Use 1st of month as date key
             history_date = f"{month_key}-01"
+            # Only keep last 5 years to avoid bloating the file
+            if history_date < "2021-01-01":
+                continue
             if history_date not in history:
                 history[history_date] = {}
             # Don't overwrite real recorded data
-            if history_date in history and name in history[history_date]:
+            if name in history[history_date]:
                 continue
-            history[history_date] = history.get(history_date, {})
             history[history_date][name] = score
 
     # Sort by date
     sorted_history = dict(sorted(history.items()))
 
     with open(HISTORY_FILE, "w") as f:
-        json.dump(sorted_history, f, indent=2)
+        json.dump(sorted_history, f, separators=(",", ":"))
 
     dates = sorted(sorted_history.keys())
     print(f"Processed {count} rockets")
