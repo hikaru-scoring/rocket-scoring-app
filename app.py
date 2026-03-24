@@ -456,7 +456,7 @@ with tab_detail:
                 export_data[axis] = [selected["axes"][axis]]
             csv_buf = io.StringIO()
             pd.DataFrame(export_data).to_csv(csv_buf, index=False)
-            st.download_button("CSV", csv_buf.getvalue(), f"{selected['name']}_score.csv", "text/csv", key="btn_csv_detail")
+            st.download_button("Excel", csv_buf.getvalue(), f"{selected['name']}_score.csv", "text/csv", key="btn_csv_detail")
 
         if save_it:
             st.session_state.saved_rocket_data = selected
@@ -741,7 +741,7 @@ with tab_rank:
         rank_export.append(row)
     csv_rank_buf = io.StringIO()
     pd.DataFrame(rank_export).to_csv(csv_rank_buf, index=False)
-    st.download_button("Download CSV (All Rockets)", csv_rank_buf.getvalue(), "rocket_1000_rankings.csv", "text/csv", key="btn_csv_rank")
+    st.download_button("Download Excel (All Rockets)", csv_rank_buf.getvalue(), "rocket_1000_rankings.csv", "text/csv", key="btn_csv_rank")
 
     # Render ranked cards
     for idx, s in enumerate(ranking_scores, 1):
@@ -920,7 +920,7 @@ with tab_ins:
         })
     csv_ins_buf = io.StringIO()
     pd.DataFrame(ins_export).to_csv(csv_ins_buf, index=False)
-    st.download_button("Download CSV", csv_ins_buf.getvalue(), "rocket_insurance_estimates.csv", "text/csv", key="btn_csv_ins")
+    st.download_button("Download Excel", csv_ins_buf.getvalue(), "rocket_insurance_estimates.csv", "text/csv", key="btn_csv_ins")
 
     # Ranked list
     for idx, d in enumerate(ins_data, 1):
