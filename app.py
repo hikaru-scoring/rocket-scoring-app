@@ -10,7 +10,11 @@ import streamlit as st
 
 from data_logic import AXES_LABELS, LOGIC_DESC, score_all_launchers, fetch_rocket_news
 from ui_components import inject_css, render_radar_chart
-from pdf_report import generate_pdf
+try:
+    from pdf_report import generate_pdf
+    _PDF_AVAILABLE = True
+except ImportError:
+    _PDF_AVAILABLE = False
 
 SCORES_HISTORY_FILE = os.path.join(os.path.dirname(__file__), "scores_history.json")
 
@@ -423,16 +427,19 @@ with tab_detail:
             clear_it = st.button("Clear", key="btn_clear")
         with col_btn3:
             # PDF export
-            rocket_snapshot = {
-                "Total Launches": str(selected["total_launches"]),
-                "Success Rate": f"{selected['success_rate']}%",
-                "LEO Capacity": _fmt_mass(selected["leo_capacity"]) if selected["leo_capacity"] else "N/A",
-                "Cost / Launch": _fmt_cost(selected["launch_cost"]) if selected["launch_cost"] else "N/A",
-                "Reusable": "Yes" if selected["reusable"] else "No",
-                "Country": selected.get("country_code", "N/A"),
-            }
-            pdf_bytes = generate_pdf(selected, AXES_LABELS, LOGIC_DESC, rocket_snapshot)
-            st.download_button("PDF", pdf_bytes, f"ROCKET1000_{selected['name'].replace(' ', '_')}.pdf", "application/pdf", key="btn_pdf_detail")
+            if _PDF_AVAILABLE:
+                rocket_snapshot = {
+                    "Total Launches": str(selected["total_launches"]),
+                    "Success Rate": f"{selected['success_rate']}%",
+                    "LEO Capacity": _fmt_mass(selected["leo_capacity"]) if selected["leo_capacity"] else "N/A",
+                    "Cost / Launch": _fmt_cost(selected["launch_cost"]) if selected["launch_cost"] else "N/A",
+                    "Reusable": "Yes" if selected["reusable"] else "No",
+                    "Country": selected.get("country_code", "N/A"),
+                }
+                pdf_bytes = generate_pdf(selected, AXES_LABELS, LOGIC_DESC, rocket_snapshot)
+                st.download_button("PDF", pdf_bytes, f"ROCKET1000_{selected['name'].replace(' ', '_')}.pdf", "application/pdf", key="btn_pdf_detail")
+            else:
+                st.button("PDF (installing...)", disabled=True, key="btn_pdf_detail")
         with col_btn4:
             # CSV export
             export_data = {
