@@ -533,6 +533,77 @@ with tab_detail:
                 unsafe_allow_html=True,
             )
 
+        # --- Insurance Premium Estimator ---
+        st.markdown("<div class='section-title'>III-B. Insurance Premium Estimator</div>", unsafe_allow_html=True)
+
+        def _estimate_premium_rate(success_rate_pct, total_launches, consecutive, reusable_flag):
+            """Estimate insurance premium rate based on rocket stats."""
+            # Base rate from failure rate (typically 1.5-2x failure rate)
+            failure_rate = (100 - success_rate_pct) / 100
+            base_rate = failure_rate * 1.75
+
+            # Confidence adjustment: fewer launches = higher uncertainty = higher rate
+            if total_launches < 5:
+                base_rate += 0.10  # +10% surcharge
+            elif total_launches < 10:
+                base_rate += 0.05  # +5% surcharge
+            elif total_launches < 20:
+                base_rate += 0.02  # +2% surcharge
+
+            # Consecutive success discount (max -1.5%)
+            streak_discount = min(consecutive * 0.0005, 0.015)
+            base_rate -= streak_discount
+
+            # Reusability factor
+            if reusable_flag:
+                if total_launches >= 50:
+                    base_rate *= 0.90  # 10% discount (proven reusable)
+                else:
+                    base_rate *= 1.05  # 5% surcharge (unproven reuse)
+
+            # Floor and ceiling
+            base_rate = max(0.015, min(base_rate, 0.25))  # 1.5% to 25%
+            return base_rate
+
+        est_rate = _estimate_premium_rate(
+            selected["success_rate"],
+            selected["total_launches"],
+            selected.get("consecutive_successes", 0),
+            selected["reusable"],
+        )
+
+        ins_col1, ins_col2 = st.columns([1, 2])
+        with ins_col1:
+            payload_value = st.number_input(
+                "Payload Value ($ million)",
+                min_value=1, max_value=2000, value=200, step=10,
+                key="ins_payload_value",
+            )
+        with ins_col2:
+            est_premium = payload_value * est_rate
+            rate_color = "#10b981" if est_rate < 0.05 else "#f59e0b" if est_rate < 0.10 else "#ef4444"
+            st.markdown(f"""
+            <div style="background:#fff; padding:20px; border-radius:12px; border:1px solid #e2e8f0; box-shadow:2px 2px 5px rgba(0,0,0,0.04);">
+                <div style="display:flex; justify-content:space-around; text-align:center;">
+                    <div>
+                        <div style="font-size:0.7em; font-weight:700; color:#94a3b8; letter-spacing:1px;">EST. PREMIUM RATE</div>
+                        <div style="font-size:2.2em; font-weight:900; color:{rate_color};">{est_rate*100:.1f}%</div>
+                    </div>
+                    <div>
+                        <div style="font-size:0.7em; font-weight:700; color:#94a3b8; letter-spacing:1px;">EST. PREMIUM</div>
+                        <div style="font-size:2.2em; font-weight:900; color:#2E7BE6;">${est_premium:.1f}M</div>
+                    </div>
+                    <div>
+                        <div style="font-size:0.7em; font-weight:700; color:#94a3b8; letter-spacing:1px;">PAYLOAD VALUE</div>
+                        <div style="font-size:2.2em; font-weight:900; color:#1e293b;">${payload_value}M</div>
+                    </div>
+                </div>
+            </div>
+            <p style="font-size:0.75em; color:#94a3b8; margin-top:8px; text-align:center;">
+                Estimate based on historical failure rate, launch count confidence, streak discount, and reusability factor. Actual premiums vary by mission, orbit, and market conditions.
+            </p>
+            """, unsafe_allow_html=True)
+
         # --- Description ---
         if selected["description"]:
             st.markdown("<div class='section-title'>Description</div>", unsafe_allow_html=True)
