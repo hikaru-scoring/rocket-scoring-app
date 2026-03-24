@@ -10,6 +10,7 @@ import streamlit as st
 
 from data_logic import AXES_LABELS, LOGIC_DESC, score_all_launchers, fetch_rocket_news
 from ui_components import inject_css, render_radar_chart
+from pdf_report import generate_pdf
 
 SCORES_HISTORY_FILE = os.path.join(os.path.dirname(__file__), "scores_history.json")
 
@@ -414,13 +415,25 @@ with tab_detail:
     if selected:
         total = int(selected["total"])
 
-        # --- Save / Clear / Export buttons ---
-        col_btn1, col_btn2, col_btn3, col_btn_rest = st.columns([1, 1, 1, 7])
+        # --- Save / Clear / PDF / CSV buttons (matches FRS-1000 order) ---
+        col_btn1, col_btn2, col_btn3, col_btn4, col_btn_rest = st.columns([1, 1, 1.5, 1.5, 5.5])
         with col_btn1:
             save_it = st.button("Save", key="btn_save")
         with col_btn2:
             clear_it = st.button("Clear", key="btn_clear")
         with col_btn3:
+            # PDF export
+            rocket_snapshot = {
+                "Total Launches": str(selected["total_launches"]),
+                "Success Rate": f"{selected['success_rate']}%",
+                "LEO Capacity": _fmt_mass(selected["leo_capacity"]) if selected["leo_capacity"] else "N/A",
+                "Cost / Launch": _fmt_cost(selected["launch_cost"]) if selected["launch_cost"] else "N/A",
+                "Reusable": "Yes" if selected["reusable"] else "No",
+                "Country": selected.get("country_code", "N/A"),
+            }
+            pdf_bytes = generate_pdf(selected, AXES_LABELS, LOGIC_DESC, rocket_snapshot)
+            st.download_button("PDF", pdf_bytes, f"ROCKET1000_{selected['name'].replace(' ', '_')}.pdf", "application/pdf", key="btn_pdf_detail")
+        with col_btn4:
             # CSV export
             export_data = {
                 "Rocket": [selected["full_name"]],
