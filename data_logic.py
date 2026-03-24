@@ -88,6 +88,11 @@ def score_launcher(launcher: dict) -> dict:
     diameter = launcher.get("diameter")
     launch_mass = launcher.get("launch_mass")
     thrust = launcher.get("thrust")
+    image_url = launcher.get("image_url") or ""
+    active = bool(launcher.get("active"))
+    manufacturer = launcher.get("manufacturer") or {}
+    country_code = manufacturer.get("country_code", "") if isinstance(manufacturer, dict) else ""
+    manufacturer_name = manufacturer.get("name", "") if isinstance(manufacturer, dict) else ""
 
     # --- Axis 1: Track Record (200) ---
     # Confidence penalty for low launch count: scale by min(total_launches/10, 1)
@@ -159,6 +164,10 @@ def score_launcher(launcher: dict) -> dict:
         "diameter": diameter,
         "launch_mass": launch_mass,
         "thrust": thrust,
+        "image_url": image_url,
+        "active": active,
+        "country_code": country_code,
+        "manufacturer_name": manufacturer_name,
     }
 
 

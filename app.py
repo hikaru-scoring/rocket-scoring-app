@@ -1,5 +1,6 @@
 # app.py
 """ROCKET-1000 — Launch Vehicle Scoring Platform."""
+import io
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
@@ -87,6 +88,20 @@ def _fmt_mass(val):
     return f"{val:.0f}kg"
 
 
+COUNTRY_FLAG = {
+    "USA": "US", "RUS": "RU", "CHN": "CN", "IND": "IN", "JPN": "JP",
+    "FRA": "FR", "EU": "EU", "ISR": "IL", "KOR": "KR", "IRN": "IR",
+    "BRA": "BR", "UKR": "UA", "GBR": "GB", "NZL": "NZ", "ITA": "IT",
+    "ESP": "ES", "DEU": "DE", "TWN": "TW", "AUS": "AU",
+}
+
+
+def _country_label(code: str) -> str:
+    if not code:
+        return ""
+    return code
+
+
 # ---------------------------------------------------------------------------
 # Load data
 # ---------------------------------------------------------------------------
@@ -100,7 +115,7 @@ if not all_scored:
 # ---------------------------------------------------------------------------
 # Tabs
 # ---------------------------------------------------------------------------
-tab_dash, tab_detail, tab_rank = st.tabs(["Dashboard", "Rocket Detail", "Rankings"])
+tab_dash, tab_detail, tab_rank, tab_method = st.tabs(["Dashboard", "Rocket Detail", "Rankings", "Methodology"])
 
 # ===================================================================
 # DASHBOARD TAB
@@ -108,15 +123,49 @@ tab_dash, tab_detail, tab_rank = st.tabs(["Dashboard", "Rocket Detail", "Ranking
 with tab_dash:
     st.markdown(
         "<div style='font-size:1.5em; font-weight:900; color:#1e3a8a; margin-bottom:5px;'>"
-        "ROCKET-1000 — Launch Vehicle Scoring Platform</div>"
+        "ROCKET-1000</div>"
+        "<p style='color:#64748b; margin-bottom:4px;'>"
+        "Every launch vehicle scored on the same 0&ndash;1,000 scale across 5 dimensions: "
+        "track record, reliability, payload, cost efficiency, and reusability.</p>"
         "<p style='color:#64748b; margin-bottom:20px;'>"
-        "Comprehensive scoring of launch vehicles based on track record, reliability, payload, cost, and reusability.</p>",
+        "Compare rockets side by side like a health check. A higher score means the vehicle is in a stronger position.</p>",
         unsafe_allow_html=True,
     )
 
+    # --- Sidebar filters ---
+    with st.sidebar:
+        st.markdown("### Filters")
+        # Country filter
+        all_countries = sorted(set(r.get("country_code", "") for r in all_scored if r.get("country_code")))
+        selected_countries = st.multiselect("Country", all_countries, default=[], key="filter_country")
+        # Reusable filter
+        reuse_filter = st.radio("Reusability", ["All", "Reusable", "Expendable"], key="filter_reuse")
+        # Active filter
+        active_filter = st.radio("Status", ["All", "Active", "Retired"], key="filter_active")
+        # Search box
+        search_query = st.text_input("Search rockets", "", key="filter_search", placeholder="e.g. Falcon, Soyuz...")
+
+    # Apply filters
+    filtered = list(all_scored)
+    if selected_countries:
+        filtered = [r for r in filtered if r.get("country_code") in selected_countries]
+    if reuse_filter == "Reusable":
+        filtered = [r for r in filtered if r["reusable"]]
+    elif reuse_filter == "Expendable":
+        filtered = [r for r in filtered if not r["reusable"]]
+    if active_filter == "Active":
+        filtered = [r for r in filtered if r.get("active")]
+    elif active_filter == "Retired":
+        filtered = [r for r in filtered if not r.get("active")]
+    if search_query:
+        q = search_query.lower()
+        filtered = [r for r in filtered if q in r["full_name"].lower() or q in r["name"].lower() or q in r.get("manufacturer_name", "").lower()]
+
+    st.markdown(f"<p style='color:#94a3b8; font-size:0.85em;'>Showing {len(filtered)} of {len(all_scored)} rockets</p>", unsafe_allow_html=True)
+
     # --- Browse by Launch Provider ---
     companies = {}
-    for r in all_scored:
+    for r in filtered:
         family = r.get("family") or "Other"
         if family not in companies:
             companies[family] = []
@@ -127,12 +176,13 @@ with tab_dash:
     st.markdown("<div class='section-title'>Browse by Launch Provider</div>", unsafe_allow_html=True)
 
     top_companies = company_order[:15]
-    comp_cols = st.columns(min(len(top_companies), 5))
-    for i, company in enumerate(top_companies):
-        with comp_cols[i % 5]:
-            if st.button(company, key=f"company_{company}", use_container_width=True):
-                st.session_state["selected_company"] = company
-                st.session_state["selected_rocket_detail"] = None
+    if top_companies:
+        comp_cols = st.columns(min(len(top_companies), 5))
+        for i, company in enumerate(top_companies):
+            with comp_cols[i % 5]:
+                if st.button(company, key=f"company_{company}", use_container_width=True):
+                    st.session_state["selected_company"] = company
+                    st.session_state["selected_rocket_detail"] = None
 
     selected_company = st.session_state.get("selected_company")
     if selected_company and selected_company in companies:
@@ -149,20 +199,41 @@ with tab_dash:
         selected_rocket_name = st.session_state.get("selected_rocket_detail")
         if selected_rocket_name:
             detail = None
-            for r in all_scored:
+            for r in filtered:
                 if r["name"] == selected_rocket_name:
                     detail = r
                     break
+            if not detail:
+                for r in all_scored:
+                    if r["name"] == selected_rocket_name:
+                        detail = r
+                        break
             if detail:
-                st.markdown(f"""
-                <div style="text-align:center; margin:10px 0;">
-                    <div style="font-size:14px; letter-spacing:2px; color:#666;">TOTAL SCORE</div>
-                    <div style="font-size:70px; font-weight:800; color:#2E7BE6; line-height:1;">
-                        {int(detail['total'])}
-                        <span style="font-size:28px; color:#BBB;">/ 1000</span>
+                # Image + score side by side
+                if detail.get("image_url"):
+                    img_col, info_col = st.columns([1, 2])
+                    with img_col:
+                        st.image(detail["image_url"], width=250)
+                    with info_col:
+                        st.markdown(f"""
+                        <div style="text-align:center; margin:10px 0;">
+                            <div style="font-size:14px; letter-spacing:2px; color:#666;">TOTAL SCORE</div>
+                            <div style="font-size:70px; font-weight:800; color:#2E7BE6; line-height:1;">
+                                {int(detail['total'])}
+                                <span style="font-size:28px; color:#BBB;">/ 1000</span>
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                else:
+                    st.markdown(f"""
+                    <div style="text-align:center; margin:10px 0;">
+                        <div style="font-size:14px; letter-spacing:2px; color:#666;">TOTAL SCORE</div>
+                        <div style="font-size:70px; font-weight:800; color:#2E7BE6; line-height:1;">
+                            {int(detail['total'])}
+                            <span style="font-size:28px; color:#BBB;">/ 1000</span>
+                        </div>
                     </div>
-                </div>
-                """, unsafe_allow_html=True)
+                    """, unsafe_allow_html=True)
 
                 cl_left, cl_right = st.columns([1.5, 1])
                 with cl_left:
@@ -193,11 +264,13 @@ with tab_dash:
             "<div style='font-size:1em; font-weight:700; color:#10b981; margin-bottom:10px;'>Top 10 Rockets</div>",
             unsafe_allow_html=True,
         )
-        for s in all_scored[:10]:
+        for s in filtered[:10]:
             score = s["total"]
+            country = _country_label(s.get("country_code", ""))
+            country_tag = f"<span style='font-size:0.75em; color:#94a3b8; margin-left:6px;'>{country}</span>" if country else ""
             st.markdown(
                 f"""<div style="background:#f0fdf4; padding:8px 12px; border-radius:8px; margin-bottom:4px; display:flex; justify-content:space-between;">
-                    <span style="font-weight:600;">{s['full_name']}</span>
+                    <span style="font-weight:600;">{s['full_name']}{country_tag}</span>
                     <span style="font-weight:900; color:#10b981;">{int(score)}</span>
                 </div>""",
                 unsafe_allow_html=True,
@@ -207,11 +280,13 @@ with tab_dash:
             "<div style='font-size:1em; font-weight:700; color:#ef4444; margin-bottom:10px;'>Bottom 10 Rockets</div>",
             unsafe_allow_html=True,
         )
-        for s in all_scored[-10:]:
+        for s in filtered[-10:]:
             score = s["total"]
+            country = _country_label(s.get("country_code", ""))
+            country_tag = f"<span style='font-size:0.75em; color:#94a3b8; margin-left:6px;'>{country}</span>" if country else ""
             st.markdown(
                 f"""<div style="background:#fef2f2; padding:8px 12px; border-radius:8px; margin-bottom:4px; display:flex; justify-content:space-between;">
-                    <span style="font-weight:600;">{s['full_name']}</span>
+                    <span style="font-weight:600;">{s['full_name']}{country_tag}</span>
                     <span style="font-weight:900; color:#ef4444;">{int(score)}</span>
                 </div>""",
                 unsafe_allow_html=True,
@@ -221,15 +296,18 @@ with tab_dash:
     st.markdown("<div class='section-title'>All Rockets</div>", unsafe_allow_html=True)
 
     cols = st.columns(3)
-    for i, rocket in enumerate(all_scored):
+    for i, rocket in enumerate(filtered):
         score = rocket["total"]
         border = _border_color(score)
+        country = _country_label(rocket.get("country_code", ""))
+        country_tag = f"<span style='font-size:0.75em; color:#94a3b8; margin-left:4px;'>{country}</span>" if country else ""
+        reuse_tag = "<span style='font-size:0.7em; background:#10b981; color:#fff; padding:1px 6px; border-radius:10px; margin-left:6px;'>Reusable</span>" if rocket["reusable"] else ""
         with cols[i % 3]:
             st.markdown(
                 f"""<div style="background:#fff; border-radius:12px; padding:18px; margin-bottom:12px;
                 border-left:4px solid {border}; box-shadow:0 2px 8px rgba(0,0,0,0.04);">
                 <div style="font-size:0.95em; font-weight:700; color:#1e293b; margin:2px 0;">
-                {rocket['full_name']}</div>
+                {rocket['full_name']}{country_tag}{reuse_tag}</div>
                 <div style="display:flex; justify-content:space-between; align-items:baseline;">
                 <span style="font-size:1.8em; font-weight:900; color:{border};">{int(score)}</span>
                 <span style="font-size:0.8em; color:#94a3b8;">{rocket['total_launches']} launches</span>
@@ -297,7 +375,7 @@ with tab_detail:
             clickmode="none",
             dragmode=False,
         )
-        st.plotly_chart(fig_timeline, use_container_width=True, config={"displayModeBar": False, "staticPlot": True}, key="detail_rocket_timeline")
+        st.plotly_chart(fig_timeline, use_container_width=True, config={"displayModeBar": False}, key="detail_rocket_timeline")
 
     rocket_names = [r["full_name"] for r in all_scored]
     selected_name = st.selectbox("Select a rocket", rocket_names, key="rocket_select")
@@ -306,12 +384,29 @@ with tab_detail:
     if selected:
         total = int(selected["total"])
 
-        # --- Save / Clear buttons ---
-        col_btn1, col_btn2, col_btn_rest = st.columns([1, 1, 8])
+        # --- Save / Clear / Export buttons ---
+        col_btn1, col_btn2, col_btn3, col_btn_rest = st.columns([1, 1, 1, 7])
         with col_btn1:
             save_it = st.button("Save", key="btn_save")
         with col_btn2:
             clear_it = st.button("Clear", key="btn_clear")
+        with col_btn3:
+            # CSV export
+            export_data = {
+                "Rocket": [selected["full_name"]],
+                "Total Score": [total],
+                "Country": [selected.get("country_code", "")],
+                "Reusable": [selected["reusable"]],
+                "Total Launches": [selected["total_launches"]],
+                "Success Rate (%)": [selected["success_rate"]],
+                "LEO Capacity (kg)": [selected["leo_capacity"]],
+                "Launch Cost ($)": [selected["launch_cost"]],
+            }
+            for axis in AXES_LABELS:
+                export_data[axis] = [selected["axes"][axis]]
+            csv_buf = io.StringIO()
+            pd.DataFrame(export_data).to_csv(csv_buf, index=False)
+            st.download_button("CSV", csv_buf.getvalue(), f"{selected['name']}_score.csv", "text/csv", key="btn_csv_detail")
 
         if save_it:
             st.session_state.saved_rocket_data = selected
@@ -320,16 +415,31 @@ with tab_detail:
             st.session_state.saved_rocket_data = None
             st.rerun()
 
-        # --- Total Score ---
-        st.markdown(f"""
-        <div style="text-align:center; margin-top:4px; margin-bottom:10px;">
-            <div style="font-size:14px; letter-spacing:2px; color:#666;">TOTAL SCORE</div>
-            <div style="font-size:90px; font-weight:800; color:#2E7BE6; line-height:1;">
-                {total}
-                <span style="font-size:35px; color:#BBB;">/ 1000</span>
+        # --- Image + Total Score ---
+        if selected.get("image_url"):
+            img_col, score_col = st.columns([1, 2.5])
+            with img_col:
+                st.image(selected["image_url"], width=280)
+            with score_col:
+                st.markdown(f"""
+                <div style="text-align:center; margin-top:4px; margin-bottom:10px;">
+                    <div style="font-size:14px; letter-spacing:2px; color:#666;">TOTAL SCORE</div>
+                    <div style="font-size:90px; font-weight:800; color:#2E7BE6; line-height:1;">
+                        {total}
+                        <span style="font-size:35px; color:#BBB;">/ 1000</span>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+        else:
+            st.markdown(f"""
+            <div style="text-align:center; margin-top:4px; margin-bottom:10px;">
+                <div style="font-size:14px; letter-spacing:2px; color:#666;">TOTAL SCORE</div>
+                <div style="font-size:90px; font-weight:800; color:#2E7BE6; line-height:1;">
+                    {total}
+                    <span style="font-size:35px; color:#BBB;">/ 1000</span>
+                </div>
             </div>
-        </div>
-        """, unsafe_allow_html=True)
+            """, unsafe_allow_html=True)
 
         # --- I. Radar + II. Score Metrics ---
         col_radar, col_axes = st.columns([1.5, 1])
@@ -382,15 +492,15 @@ with tab_detail:
                 # Why X? expanders
                 with st.expander(f"Why {int(v1)}?", expanded=False):
                     if axis == "Track Record":
-                        st.markdown("**Formula:** `(Successful Launches / Total Launches) x 200`\n\n**Source:** Launch Library 2 API")
+                        st.markdown("**Formula:** `(Successful Launches / Total Launches) x 200 x Confidence`\n\nConfidence = min(Total Launches / 10, 1.0). Rockets with fewer than 10 launches get penalized.\n\n**Source:** Launch Library 2 API")
                     elif axis == "Reliability Streak":
                         st.markdown("**Formula:** `Consecutive Successful Launches x 2 (capped at 200)`\n\n**Source:** Launch Library 2 API")
                     elif axis == "Payload Capacity":
-                        st.markdown("**Formula:** `LEO Capacity / 150 (capped at 200)`\n\n**Source:** Launch Library 2 API")
+                        st.markdown("**Formula:** `(log2(LEO Capacity) / 15) x 200 (capped at 200)`\n\nLogarithmic scale prevents heavy-lift rockets from making all others look like zero.\n\n**Source:** Launch Library 2 API")
                     elif axis == "Cost Efficiency":
-                        st.markdown("**Formula:** `200 - (Cost per kg / 50) (capped at 200)`\n\n**Source:** Launch Library 2 API")
+                        st.markdown("**Formula:** `(5.5 - log10(Cost per kg)) x 75 (capped at 200)`\n\nLower cost per kilogram = higher score. Default 100 when cost data is unavailable.\n\n**Source:** Launch Library 2 API")
                     elif axis == "Reusability & Innovation":
-                        st.markdown("**Formula:** `Base (100 if reusable, 50 if not) + Landing Success Rate x 100`\n\n**Source:** Launch Library 2 API")
+                        st.markdown("**Formula:** `Base (100 if reusable, 50 if expendable) + Landing Success Rate x 100`\n\n**Source:** Launch Library 2 API")
 
         # --- III. Specs Snapshot ---
         st.markdown("<div class='section-title'>III. Specs Snapshot</div>", unsafe_allow_html=True)
@@ -468,27 +578,52 @@ with tab_rank:
     # Sort option
     sort_by = st.selectbox("Sort by", ["Total Score"] + AXES_LABELS, key="rank_sort")
 
-    ranking_scores = list(all_scored)  # copy to avoid mutating original
+    ranking_scores = list(filtered)
     if sort_by == "Total Score":
         ranking_scores.sort(key=lambda x: x["total"], reverse=True)
     else:
         ranking_scores.sort(key=lambda x: x["axes"].get(sort_by, 0), reverse=True)
 
-    # Render ranked cards (matching GOV-1000 style)
+    # CSV export for full ranking
+    rank_export = []
+    for idx, s in enumerate(ranking_scores, 1):
+        row = {
+            "Rank": idx,
+            "Rocket": s["full_name"],
+            "Total Score": int(s["total"]),
+            "Country": s.get("country_code", ""),
+            "Reusable": s["reusable"],
+            "Active": s.get("active", False),
+            "Total Launches": s["total_launches"],
+            "Success Rate (%)": s["success_rate"],
+        }
+        for axis in AXES_LABELS:
+            row[axis] = s["axes"].get(axis, 0)
+        rank_export.append(row)
+    csv_rank_buf = io.StringIO()
+    pd.DataFrame(rank_export).to_csv(csv_rank_buf, index=False)
+    st.download_button("Download CSV (All Rockets)", csv_rank_buf.getvalue(), "rocket_1000_rankings.csv", "text/csv", key="btn_csv_rank")
+
+    # Render ranked cards
     for idx, s in enumerate(ranking_scores, 1):
         score = int(s["total"])
         bar_color = _border_color(score)
+        country = _country_label(s.get("country_code", ""))
+        country_tag = f"<span style='font-size:0.7em; color:#94a3b8; margin-left:6px;'>{country}</span>" if country else ""
 
         st.markdown(
             f"""
             <div style="display:flex; align-items:center; padding:14px 20px; background:#fff; border-radius:12px; margin-bottom:8px; border:1px solid #e2e8f0; box-shadow:0 1px 3px rgba(0,0,0,0.04);">
                 <div style="font-size:1.4em; font-weight:900; color:#94a3b8; width:40px;">#{idx}</div>
                 <div style="flex:1;">
-                    <div style="font-size:1.05em; font-weight:700; color:#1e293b;">{s['full_name']}</div>
+                    <div style="font-size:1.05em; font-weight:700; color:#1e293b;">{s['full_name']}{country_tag}</div>
                     <span style="font-size:0.75em; background:#2E7BE6; color:#fff; padding:2px 8px; border-radius:20px;">{s['total_launches']} launches</span>
-                </div>
-                <div style="text-align:right; margin-right:15px; font-size:0.85em; color:#94a3b8;">
-                    {"Reusable" if s['reusable'] else "Expendable"}
+                    <span style="font-size:0.75em; background:{'#10b981' if s['reusable'] else '#94a3b8'}; color:#fff; padding:2px 8px; border-radius:20px; margin-left:4px;">
+                        {"Reusable" if s['reusable'] else "Expendable"}
+                    </span>
+                    <span style="font-size:0.75em; background:{'#3b82f6' if s.get('active') else '#94a3b8'}; color:#fff; padding:2px 8px; border-radius:20px; margin-left:4px;">
+                        {"Active" if s.get('active') else "Retired"}
+                    </span>
                 </div>
                 <div style="text-align:right; min-width:80px;">
                     <div style="font-size:1.5em; font-weight:900; color:{bar_color};">{score}</div>
@@ -558,6 +693,97 @@ with tab_rank:
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
     )
     st.plotly_chart(fig_stack, use_container_width=True, config={"displayModeBar": False}, key="rank_axis_breakdown")
+
+# ===================================================================
+# METHODOLOGY TAB
+# ===================================================================
+with tab_method:
+    st.markdown("""
+    <div style="text-align:center; margin:20px 0 30px;">
+        <div style="font-size:2.5em; font-weight:900; color:#2E7BE6; letter-spacing:-1px;">ROCKET-1000</div>
+        <div style="font-size:1.2em; color:#64748b;">Scoring Methodology</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("""
+    ### What is ROCKET-1000?
+
+    ROCKET-1000 is a multi-dimensional scoring framework that evaluates every launch vehicle on the **same 0 to 1,000 scale**.
+    Each rocket is scored across **5 axes**, each worth a maximum of **200 points**.
+
+    This is not a recommendation to use or invest in any launch provider. It is a screening and comparison tool.
+    """)
+
+    st.markdown("---")
+
+    # Axis explanations
+    m1, m2 = st.columns(2)
+    with m1:
+        st.markdown("""
+        #### 1. Track Record (200 pts)
+        **What:** Historical launch success rate, adjusted for confidence.
+
+        **Formula:** `(Successful / Total) x 200 x Confidence`
+
+        Confidence = min(Total Launches / 10, 1.0). Rockets with fewer than 10 launches are penalized to prevent a rocket with 2/2 successes from outscoring one with 190/200.
+
+        ---
+
+        #### 2. Reliability Streak (200 pts)
+        **What:** Current run of consecutive successful launches.
+
+        **Formula:** `Consecutive Successes x 2 (capped at 200)`
+
+        100 consecutive successes = perfect score. A single failure resets this to zero.
+
+        ---
+
+        #### 3. Payload Capacity (200 pts)
+        **What:** Maximum payload to Low Earth Orbit (LEO).
+
+        **Formula:** `(log2(LEO kg) / 15) x 200`
+
+        Logarithmic scale so that heavy-lift rockets (Starship, SLS) don't make everything else look like zero. If LEO data is missing, GTO x 2 is used as a proxy.
+        """)
+    with m2:
+        st.markdown("""
+        #### 4. Cost Efficiency (200 pts)
+        **What:** Cost per kilogram to orbit.
+
+        **Formula:** `(5.5 - log10(cost/kg)) x 75 (capped at 200)`
+
+        Lower cost per kg = higher score. When cost data is unavailable (common for older rockets), a neutral score of 100 is assigned.
+
+        ---
+
+        #### 5. Reusability & Innovation (200 pts)
+        **What:** Landing capability and reuse track record.
+
+        **Formula:** `Base + Landing Success Rate x 100`
+
+        - Reusable rockets start at 100 points
+        - Expendable rockets start at 50 points
+        - Landing success rate adds up to 100 bonus points
+
+        A fully reusable rocket with 100% landing success = 200 points.
+        """)
+
+    st.markdown("---")
+
+    st.markdown("""
+    ### Data Source
+
+    All launch data comes from the **Launch Library 2 API** (thespacedevs.com), which aggregates information from official space agency records and public sources.
+
+    Only rockets with **at least 1 launch** are scored.
+
+    ### Limitations
+
+    - **Cost data** is missing for many rockets, resulting in a neutral 100/200 score
+    - **New rockets** with few launches receive a confidence penalty on Track Record
+    - **Landing data** may not capture all attempted recoveries
+    - Scores update when the API data updates (cached for 1 hour)
+    """)
 
 # ---------------------------------------------------------------------------
 # Disclaimer
