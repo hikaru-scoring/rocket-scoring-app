@@ -528,9 +528,9 @@ with tab_detail:
                 v2 = saved["axes"].get(axis, 0) if saved else None
                 desc_text = LOGIC_DESC.get(axis, "")
 
-                score_html = f'<span style="color: #2E7BE6;">{int(v1)}</span>'
+                score_html = f'<span style="color: #2E7BE6;">{int(v1)}</span><span style="color:#bbb;font-size:0.5em;font-weight:600;"> /200</span>'
                 if v2 is not None:
-                    score_html += f' <span style="color: #ccc; font-size: 0.9em; font-weight:bold; margin: 0 6px;">vs</span> <span style="color: #F4A261;">{int(v2)}</span>'
+                    score_html += f' <span style="color: #ccc; font-size: 0.9em; font-weight:bold; margin: 0 6px;">vs</span> <span style="color: #F4A261;">{int(v2)}</span><span style="color:#bbb;font-size:0.5em;font-weight:600;"> /200</span>'
 
                 st.markdown(
                     f"""
