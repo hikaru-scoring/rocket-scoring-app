@@ -143,7 +143,7 @@ def score_launcher(launcher: dict) -> dict:
         else:
             ax4 = 200
     else:
-        ax4 = 100  # neutral when data unavailable
+        ax4 = None  # unavailable when data missing
 
     # --- Axis 5: Reusability & Innovation (200) ---
     base = 100 if reusable else 50
@@ -151,21 +151,28 @@ def score_launcher(launcher: dict) -> dict:
     landing_bonus = (successful_landings / landing_denom) * 100
     ax5 = _clamp(base + landing_bonus, 0, 200)
 
-    axes = {
-        "Track Record": round(ax1, 1),
-        "Reliability Streak": round(ax2, 1),
-        "Payload Capacity": round(ax3, 1),
-        "Cost Efficiency": round(ax4, 1),
-        "Reusability & Innovation": round(ax5, 1),
+    all_axes = {
+        "Track Record": round(ax1, 1) if ax1 is not None else None,
+        "Reliability Streak": round(ax2, 1) if ax2 is not None else None,
+        "Payload Capacity": round(ax3, 1) if ax3 is not None else None,
+        "Cost Efficiency": round(ax4, 1) if ax4 is not None else None,
+        "Reusability & Innovation": round(ax5, 1) if ax5 is not None else None,
     }
-    total = round(sum(axes.values()), 1)
+    unavailable_axes = [k for k, v in all_axes.items() if v is None]
+    available = {k: v for k, v in all_axes.items() if v is not None}
+    if available:
+        raw_sum = sum(available.values())
+        total = round(raw_sum / len(available) * 5, 1)
+    else:
+        total = 0
 
     return {
         "name": short_name,
         "full_name": name,
         "family": family,
-        "axes": axes,
+        "axes": all_axes,
         "total": total,
+        "unavailable_axes": unavailable_axes,
         "success_rate": round(success_rate * 100, 1) if total_launches > 0 else 0.0,
         "total_launches": total_launches,
         "leo_capacity": effective_leo,
