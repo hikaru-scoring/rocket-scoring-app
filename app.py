@@ -87,7 +87,7 @@ def render_daily_score_tracker(asset_name: str):
     st.plotly_chart(fig_daily, use_container_width=True, config={"displayModeBar": False}, key=f"daily_tracker_{asset_name}")
 
 APP_TITLE = "ROCKET-1000 — Launch Vehicle Scoring Platform"
-st.set_page_config(page_title=APP_TITLE, layout="wide")
+st.set_page_config(page_title=APP_TITLE, page_icon="🚀", layout="wide")
 
 # ---------------------------------------------------------------------------
 # CSS — hide Streamlit chrome + inject shared styles
