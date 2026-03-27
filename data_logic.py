@@ -2,8 +2,12 @@
 """Data fetching and scoring logic for ROCKET-1000."""
 import os
 import json
-import streamlit as st
 import requests
+
+try:
+    import streamlit as st
+except ImportError:
+    st = None
 
 API_BASE = "https://ll.thespacedevs.com/2.2.0/config/launcher/"
 CACHE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "launcher_cache.json")
@@ -30,7 +34,14 @@ def _clamp(value, lo, hi):
     return max(lo, min(hi, value))
 
 
-@st.cache_data(ttl=3600, show_spinner=False)
+def _cache_data(func):
+    """Apply st.cache_data when streamlit is available, otherwise no-op."""
+    if st is not None:
+        return st.cache_data(ttl=3600, show_spinner=False)(func)
+    return func
+
+
+@_cache_data
 def fetch_all_launchers() -> list:
     """Fetch launcher configs, using local cache first then API fallback."""
     # Try local cache first (always available on deploy)
@@ -87,7 +98,7 @@ def score_launcher(launcher: dict) -> dict:
     length = launcher.get("length")
     diameter = launcher.get("diameter")
     launch_mass = launcher.get("launch_mass")
-    thrust = launcher.get("thrust")
+    thrust = launcher.get("to_thrust")
     image_url = launcher.get("image_url") or ""
     active = bool(launcher.get("active"))
     manufacturer = launcher.get("manufacturer") or {}
@@ -192,7 +203,7 @@ def score_launcher(launcher: dict) -> dict:
     }
 
 
-@st.cache_data(ttl=3600, show_spinner=False)
+@_cache_data
 def fetch_rocket_news(rocket_name: str, max_items: int = 5) -> list:
     """Fetch recent news articles for a rocket from Spaceflight News API."""
     try:

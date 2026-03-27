@@ -4,16 +4,16 @@ Uses launcher_cache.json to estimate what scores would have been
 at monthly intervals from each rocket's maiden flight to now.
 """
 import json
-import math
 import os
+import sys
 from datetime import datetime, timedelta
+
+# Add project root to path so we can import data_logic without streamlit
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from data_logic import score_launcher
 
 CACHE_FILE = "launcher_cache.json"
 HISTORY_FILE = "scores_history.json"
-
-
-def _clamp(value, lo, hi):
-    return max(lo, min(hi, value))
 
 
 def _to_num(val):
@@ -25,51 +25,23 @@ def _to_num(val):
 
 def compute_score(total_launches, successful, consecutive, effective_leo, thrust_kn,
                   launch_cost, reusable, successful_landings, attempted_landings):
-    """Compute total score given cumulative stats at a point in time."""
-    # Axis 1: Track Record
-    if total_launches > 0:
-        success_rate = successful / total_launches
-        confidence = min(total_launches / 10, 1.0)
-        ax1 = _clamp(success_rate * 200 * confidence, 0, 200)
-    else:
-        ax1 = 0
-
-    # Axis 2: Reliability Streak
-    ax2 = _clamp(consecutive * 2, 0, 200)
-
-    # Axis 3: Payload Capacity (75% payload + 25% thrust)
-    payload_score = 0
-    if effective_leo > 0:
-        payload_score = _clamp((math.log2(effective_leo) / 15) * 200, 0, 200)
-    thrust_score = 0
-    if thrust_kn > 0:
-        thrust_score = _clamp((math.log2(thrust_kn) / 17) * 200, 0, 200)
-    if effective_leo > 0 and thrust_kn > 0:
-        ax3 = payload_score * 0.75 + thrust_score * 0.25
-    elif effective_leo > 0:
-        ax3 = payload_score
-    elif thrust_kn > 0:
-        ax3 = thrust_score
-    else:
-        ax3 = 0
-
-    # Axis 4: Cost Efficiency
-    if launch_cost and effective_leo and effective_leo > 0:
-        cost_per_kg = launch_cost / effective_leo
-        if cost_per_kg > 0:
-            ax4 = _clamp((5.5 - math.log10(cost_per_kg)) * 75, 0, 200)
-        else:
-            ax4 = 200
-    else:
-        ax4 = 100
-
-    # Axis 5: Reusability & Innovation
-    base = 100 if reusable else 50
-    landing_denom = max(attempted_landings, 1)
-    landing_bonus = (successful_landings / landing_denom) * 100
-    ax5 = _clamp(base + landing_bonus, 0, 200)
-
-    return int(round(ax1 + ax2 + ax3 + ax4 + ax5))
+    """Compute total score by building a launcher dict and using score_launcher."""
+    fake_launcher = {
+        "full_name": "_sim",
+        "name": "_sim",
+        "total_launch_count": total_launches,
+        "successful_launches": successful,
+        "consecutive_successful_launches": consecutive,
+        "leo_capacity": effective_leo,
+        "gto_capacity": 0,
+        "launch_cost": launch_cost,
+        "reusable": reusable,
+        "successful_landings": successful_landings,
+        "attempted_landings": attempted_landings,
+        "to_thrust": thrust_kn,
+    }
+    result = score_launcher(fake_launcher)
+    return int(result["total"])
 
 
 def simulate_rocket_history(launcher):
@@ -110,11 +82,8 @@ def simulate_rocket_history(launcher):
     attempted_landings_final = int(_to_num(launcher.get("attempted_landings")))
 
     # Distribute launches over time
-    # Assume failures happen in the first 30% of the program
     total_months = max(1, (now.year - start_date.year) * 12 + (now.month - start_date.month))
 
-    # Build a launch timeline: distribute launches across months
-    # More launches in recent months (exponential ramp-up is realistic)
     monthly_snapshots = {}
 
     for month_offset in range(0, total_months + 1, 1):
@@ -132,7 +101,7 @@ def simulate_rocket_history(launcher):
 
         # Failures concentrated in early phase
         if failed > 0:
-            failure_progress = min(progress / 0.4, 1.0)  # 40% of program has all failures
+            failure_progress = min(progress / 0.4, 1.0)
             cum_failures = int(failed * failure_progress)
         else:
             cum_failures = 0
@@ -141,15 +110,13 @@ def simulate_rocket_history(launcher):
 
         # Consecutive streak: builds up in later phases
         if progress > 0.5 and cum_failures >= failed:
-            # All failures are behind us, streak is building
-            streak_launches = cum_launches - (cum_successful - consecutive_final) if cum_successful > consecutive_final else cum_launches
             cum_consecutive = min(int(consecutive_final * min((progress - 0.5) * 2, 1.0)), consecutive_final)
         else:
             cum_consecutive = max(0, int(consecutive_final * max(0, progress - 0.3) / 0.7))
 
-        # Landings: only in later phases (SpaceX started landing ~2015)
+        # Landings: only in later phases
         if attempted_landings_final > 0:
-            landing_progress = max(0, (progress - 0.5) * 2)  # landings in latter half
+            landing_progress = max(0, (progress - 0.5) * 2)
             cum_attempted = int(attempted_landings_final * landing_progress)
             cum_landed = int(successful_landings_final * landing_progress)
         else:
