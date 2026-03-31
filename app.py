@@ -115,11 +115,6 @@ div[class*="embeddedAppMetaInfoBar"] { display: none !important; }
 </style>
 """, unsafe_allow_html=True)
 
-# Logo
-import os as _os
-_logo_path = _os.path.join(_os.path.dirname(__file__), "logo.png")
-if _os.path.exists(_logo_path):
-    st.image(_logo_path, width=180)
 
 # ---------------------------------------------------------------------------
 # Session state
